@@ -184,12 +184,12 @@ export async function downloadPDF(data: ReportData) {
   if (data.conclusion) {
     addNewPageIfNeeded(30);
     y += 5;
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("Sarabun", "bold");
     pdf.setFontSize(14);
     pdf.setTextColor(30, 58, 138);
-    pdf.text("Summary", margin, y);
+    pdf.text("สรุปผล", margin, y);
     y += 8;
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont("Sarabun", "normal");
     pdf.setFontSize(11);
     pdf.setTextColor(50, 50, 50);
     for (const line of pdf.splitTextToSize(data.conclusion, contentW)) {
