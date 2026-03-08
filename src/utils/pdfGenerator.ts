@@ -1,8 +1,30 @@
 import { ReportData } from "@/types/report";
 import jsPDF from "jspdf";
 
+async function loadFont(url: string): Promise<string> {
+  const res = await fetch(url);
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function registerThaiFont(pdf: jsPDF) {
+  const [regular, bold] = await Promise.all([
+    loadFont("/fonts/Sarabun-Regular.ttf"),
+    loadFont("/fonts/Sarabun-Bold.ttf"),
+  ]);
+  pdf.addFileToVFS("Sarabun-Regular.ttf", regular);
+  pdf.addFont("Sarabun-Regular.ttf", "Sarabun", "normal");
+  pdf.addFileToVFS("Sarabun-Bold.ttf", bold);
+  pdf.addFont("Sarabun-Bold.ttf", "Sarabun", "bold");
+  pdf.setFont("Sarabun");
+}
+
 export async function downloadPDF(data: ReportData) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  await registerThaiFont(pdf);
   const pageW = 210;
   const pageH = 297;
   const margin = 15;
