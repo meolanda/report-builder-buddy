@@ -31,6 +31,22 @@ const Index = () => {
     subject: "",
   });
 
+  // Load default logo on mount
+  useEffect(() => {
+    if (!jobInfo.logo) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.getContext("2d")?.drawImage(img, 0, 0);
+        setJobInfo((prev) => ({ ...prev, logo: canvas.toDataURL("image/jpeg") }));
+      };
+      img.src = defaultLogo;
+    }
+  }, []);
+
   const [categories, setCategories] = useState<Category[]>(
     JSON.parse(JSON.stringify(DEFAULT_CATEGORIES))
   );
