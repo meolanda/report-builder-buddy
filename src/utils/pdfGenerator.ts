@@ -151,7 +151,8 @@ export async function downloadPDF(data: ReportData) {
         if (unit.beforePhotos.length > 0) {
           pdf.setFontSize(10);
           pdf.setTextColor(100, 100, 100);
-          pdf.text("Before:", margin + 4, y);
+          pdf.setFont("Sarabun", "normal");
+          pdf.text("ก่อน:", margin + 4, y);
           y += 5;
           y = await addPhotoPair(unit.beforePhotos, y);
         }
