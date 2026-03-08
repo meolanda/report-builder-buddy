@@ -202,6 +202,7 @@ const Index = () => {
       </div>
 
       {showPreview && <PDFPreview data={reportData} onClose={() => setShowPreview(false)} />}
+      <AddCategoryDialog open={showAddCategory} onClose={() => setShowAddCategory(false)} onAdd={addCategory} />
     </div>
   );
 };
