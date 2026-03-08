@@ -21,6 +21,7 @@ const Index = () => {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
 
   const [jobInfo, setJobInfo] = useState<JobInfo>({
     clientName: "",
