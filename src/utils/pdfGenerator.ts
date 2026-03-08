@@ -1,8 +1,30 @@
 import { ReportData } from "@/types/report";
 import jsPDF from "jspdf";
 
+async function loadFont(url: string): Promise<string> {
+  const res = await fetch(url);
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+async function registerThaiFont(pdf: jsPDF) {
+  const [regular, bold] = await Promise.all([
+    loadFont("/fonts/Sarabun-Regular.ttf"),
+    loadFont("/fonts/Sarabun-Bold.ttf"),
+  ]);
+  pdf.addFileToVFS("Sarabun-Regular.ttf", regular);
+  pdf.addFont("Sarabun-Regular.ttf", "Sarabun", "normal");
+  pdf.addFileToVFS("Sarabun-Bold.ttf", bold);
+  pdf.addFont("Sarabun-Bold.ttf", "Sarabun", "bold");
+  pdf.setFont("Sarabun");
+}
+
 export async function downloadPDF(data: ReportData) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  await registerThaiFont(pdf);
   const pageW = 210;
   const pageH = 297;
   const margin = 15;
@@ -51,7 +73,7 @@ export async function downloadPDF(data: ReportData) {
         if (photo.caption) {
           pdf.setFontSize(8);
           pdf.setTextColor(80, 80, 80);
-          pdf.setFont("helvetica", "normal");
+          pdf.setFont("Sarabun", "normal");
           pdf.text(pdf.splitTextToSize(photo.caption, photoW), x, y + photoH + 4);
         }
       }
@@ -71,7 +93,7 @@ export async function downloadPDF(data: ReportData) {
     } catch { y += 5; }
   }
 
-  pdf.setFont("helvetica", "bold");
+  pdf.setFont("Sarabun", "bold");
   pdf.setFontSize(22);
   pdf.setTextColor(30, 58, 138);
   pdf.text(data.jobInfo.subject || "Report", pageW / 2, y, { align: "center" });
@@ -84,15 +106,15 @@ export async function downloadPDF(data: ReportData) {
   pdf.setFontSize(11);
   pdf.setTextColor(50, 50, 50);
   const infoLines = [
-    ["Client", data.jobInfo.clientName],
-    ["Date", data.jobInfo.dateTime],
-    ["Location", data.jobInfo.location],
-    ["Reporter", data.jobInfo.reporterName],
+    ["ลูกค้า", data.jobInfo.clientName],
+    ["วันที่", data.jobInfo.dateTime],
+    ["สถานที่", data.jobInfo.location],
+    ["ผู้รายงาน", data.jobInfo.reporterName],
   ].filter(([, v]) => v);
   for (const [label, value] of infoLines) {
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("Sarabun", "bold");
     pdf.text(`${label}: `, margin, y);
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont("Sarabun", "normal");
     pdf.text(value, margin + 30, y);
     y += 7;
   }
@@ -106,7 +128,7 @@ export async function downloadPDF(data: ReportData) {
 
     addNewPageIfNeeded(25);
     y += 5;
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("Sarabun", "bold");
     pdf.setFontSize(16);
     pdf.setTextColor(30, 58, 138);
     pdf.text(`${cat.icon} ${cat.name}`, margin, y);
@@ -120,7 +142,7 @@ export async function downloadPDF(data: ReportData) {
       for (const unit of cat.units) {
         if (unit.beforePhotos.length === 0 && unit.afterPhotos.length === 0) continue;
         addNewPageIfNeeded(20);
-        pdf.setFont("helvetica", "bold");
+        pdf.setFont("Sarabun", "bold");
         pdf.setFontSize(12);
         pdf.setTextColor(60, 60, 60);
         pdf.text(unit.name, margin + 2, y);
@@ -129,7 +151,8 @@ export async function downloadPDF(data: ReportData) {
         if (unit.beforePhotos.length > 0) {
           pdf.setFontSize(10);
           pdf.setTextColor(100, 100, 100);
-          pdf.text("Before:", margin + 4, y);
+          pdf.setFont("Sarabun", "normal");
+          pdf.text("ก่อน:", margin + 4, y);
           y += 5;
           y = await addPhotoPair(unit.beforePhotos, y);
         }
@@ -137,7 +160,8 @@ export async function downloadPDF(data: ReportData) {
           addNewPageIfNeeded(15);
           pdf.setFontSize(10);
           pdf.setTextColor(100, 100, 100);
-          pdf.text("After:", margin + 4, y);
+          pdf.setFont("Sarabun", "normal");
+          pdf.text("หลัง:", margin + 4, y);
           y += 5;
           y = await addPhotoPair(unit.afterPhotos, y);
         }
@@ -146,7 +170,7 @@ export async function downloadPDF(data: ReportData) {
       for (const sub of cat.subSections) {
         if (sub.photos.length === 0) continue;
         addNewPageIfNeeded(20);
-        pdf.setFont("helvetica", "bold");
+        pdf.setFont("Sarabun", "bold");
         pdf.setFontSize(12);
         pdf.setTextColor(60, 60, 60);
         pdf.text(sub.name, margin + 2, y);
@@ -160,12 +184,12 @@ export async function downloadPDF(data: ReportData) {
   if (data.conclusion) {
     addNewPageIfNeeded(30);
     y += 5;
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("Sarabun", "bold");
     pdf.setFontSize(14);
     pdf.setTextColor(30, 58, 138);
-    pdf.text("Summary", margin, y);
+    pdf.text("สรุปผล", margin, y);
     y += 8;
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont("Sarabun", "normal");
     pdf.setFontSize(11);
     pdf.setTextColor(50, 50, 50);
     for (const line of pdf.splitTextToSize(data.conclusion, contentW)) {
@@ -184,7 +208,7 @@ export async function downloadPDF(data: ReportData) {
     y += 6;
     pdf.setFontSize(9);
     pdf.setTextColor(120, 120, 120);
-    pdf.setFont("helvetica", "italic");
+    pdf.setFont("Sarabun", "normal");
     for (const line of pdf.splitTextToSize(data.jobInfo.footerNote, contentW)) {
       addNewPageIfNeeded(5);
       pdf.text(line, pageW / 2, y, { align: "center" });
