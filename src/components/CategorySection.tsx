@@ -191,7 +191,14 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
   );
 };
 
-const CategorySection = ({ category, onUpdate }: Props) => {
+interface CategorySectionProps {
+  category: Category;
+  onUpdate: (cat: Category) => void;
+  onDelete?: () => void;
+  isCustom?: boolean;
+}
+
+const CategorySection = ({ category, onUpdate, onDelete, isCustom }: CategorySectionProps) => {
   const [isOpen, setIsOpen] = useState(true);
 
   const totalPhotos = category.type === "unit-based"
@@ -211,6 +218,11 @@ const CategorySection = ({ category, onUpdate }: Props) => {
                 {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               </button>
             </CollapsibleTrigger>
+            {isCustom && onDelete && (
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CollapsibleContent>
