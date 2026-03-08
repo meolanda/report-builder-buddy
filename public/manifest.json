@@ -1,0 +1,16 @@
+{
+  "name": "Pro Site Report",
+  "short_name": "SiteReport",
+  "description": "สร้างรายงานรูปภาพเป็น PDF อย่างมืออาชีพ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64",
+      "type": "image/x-icon"
+    }
+  ]
+}
