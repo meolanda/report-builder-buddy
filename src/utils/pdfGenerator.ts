@@ -208,7 +208,7 @@ export async function downloadPDF(data: ReportData) {
     y += 6;
     pdf.setFontSize(9);
     pdf.setTextColor(120, 120, 120);
-    pdf.setFont("helvetica", "italic");
+    pdf.setFont("Sarabun", "normal");
     for (const line of pdf.splitTextToSize(data.jobInfo.footerNote, contentW)) {
       addNewPageIfNeeded(5);
       pdf.text(line, pageW / 2, y, { align: "center" });
