@@ -22,7 +22,11 @@ async function registerThaiFont(pdf: jsPDF) {
   pdf.setFont("Sarabun");
 }
 
-export async function downloadPDF(data: ReportData) {
+interface PDFOptions {
+  watermarkText?: string;
+}
+
+export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   await registerThaiFont(pdf);
   const pageW = 210;
@@ -31,8 +35,11 @@ export async function downloadPDF(data: ReportData) {
   const contentW = pageW - margin * 2;
   let y = margin;
 
+  // Track category page numbers for TOC
+  const tocEntries: { name: string; icon: string; page: number }[] = [];
+
   const addNewPageIfNeeded = (need: number) => {
-    if (y + need > pageH - margin) {
+    if (y + need > pageH - margin - 10) { // extra 10mm for page number
       pdf.addPage();
       y = margin;
     }
@@ -82,7 +89,7 @@ export async function downloadPDF(data: ReportData) {
     return y;
   };
 
-  // === COVER ===
+  // === COVER (Page 1) ===
   if (data.jobInfo.logo) {
     try {
       const logoImg = await loadImage(data.jobInfo.logo);
@@ -119,101 +126,237 @@ export async function downloadPDF(data: ReportData) {
     y += 7;
   }
 
-  // === CATEGORIES ===
-  for (const cat of data.categories) {
-    const hasPhotos = cat.type === "unit-based"
-      ? cat.units.some((u) => u.beforePhotos.length > 0 || u.afterPhotos.length > 0)
-      : cat.subSections.some((s) => s.photos.length > 0);
-    if (!hasPhotos) continue;
+  // === TABLE OF CONTENTS ===
+  const categoriesWithPhotos = data.categories.filter((cat) => {
+    if (cat.type === "unit-based") return cat.units.some((u) => u.beforePhotos.length > 0 || u.afterPhotos.length > 0);
+    return cat.subSections.some((s) => s.photos.length > 0);
+  });
 
-    addNewPageIfNeeded(25);
-    y += 5;
-    pdf.setFont("Sarabun", "bold");
-    pdf.setFontSize(16);
-    pdf.setTextColor(30, 58, 138);
-    pdf.text(`${cat.icon} ${cat.name}`, margin, y);
-    y += 3;
-    pdf.setDrawColor(59, 130, 246);
-    pdf.setLineWidth(0.3);
-    pdf.line(margin, y, margin + contentW * 0.5, y);
-    y += 8;
-
-    if (cat.type === "unit-based") {
-      for (const unit of cat.units) {
-        if (unit.beforePhotos.length === 0 && unit.afterPhotos.length === 0) continue;
-        addNewPageIfNeeded(20);
-        pdf.setFont("Sarabun", "bold");
-        pdf.setFontSize(12);
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(unit.name, margin + 2, y);
-        y += 7;
-
-        if (unit.beforePhotos.length > 0) {
-          pdf.setFontSize(10);
-          pdf.setTextColor(100, 100, 100);
-          pdf.setFont("Sarabun", "normal");
-          pdf.text("ก่อน:", margin + 4, y);
-          y += 5;
-          y = await addPhotoPair(unit.beforePhotos, y);
-        }
-        if (unit.afterPhotos.length > 0) {
-          addNewPageIfNeeded(15);
-          pdf.setFontSize(10);
-          pdf.setTextColor(100, 100, 100);
-          pdf.setFont("Sarabun", "normal");
-          pdf.text("หลัง:", margin + 4, y);
-          y += 5;
-          y = await addPhotoPair(unit.afterPhotos, y);
-        }
-      }
-    } else {
-      for (const sub of cat.subSections) {
-        if (sub.photos.length === 0) continue;
-        addNewPageIfNeeded(20);
-        pdf.setFont("Sarabun", "bold");
-        pdf.setFontSize(12);
-        pdf.setTextColor(60, 60, 60);
-        pdf.text(sub.name, margin + 2, y);
-        y += 7;
-        y = await addPhotoPair(sub.photos, y);
-      }
-    }
-  }
-
-  // === CONCLUSION ===
-  if (data.conclusion) {
-    addNewPageIfNeeded(30);
-    y += 5;
+  if (categoriesWithPhotos.length > 0) {
+    y += 10;
+    addNewPageIfNeeded(20 + categoriesWithPhotos.length * 8);
     pdf.setFont("Sarabun", "bold");
     pdf.setFontSize(14);
     pdf.setTextColor(30, 58, 138);
-    pdf.text("สรุปผล", margin, y);
+    pdf.text("สารบัญ", margin, y);
     y += 8;
+    pdf.setDrawColor(59, 130, 246);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin, y, margin + 30, y);
+    y += 6;
+
+    // We'll fill in page numbers later with a placeholder approach
+    const tocStartY = y;
+    const tocPageNum = pdf.getNumberOfPages();
+    // Reserve space for TOC entries
+    for (let i = 0; i < categoriesWithPhotos.length; i++) {
+      y += 7;
+    }
+    if (data.conclusion) y += 7;
+    y += 5;
+
+    // === CATEGORIES ===
+    for (const cat of categoriesWithPhotos) {
+      addNewPageIfNeeded(25);
+      tocEntries.push({ name: cat.name, icon: cat.icon, page: pdf.getNumberOfPages() });
+      y += 5;
+      pdf.setFont("Sarabun", "bold");
+      pdf.setFontSize(16);
+      pdf.setTextColor(30, 58, 138);
+      pdf.text(`${cat.icon} ${cat.name}`, margin, y);
+      y += 3;
+      pdf.setDrawColor(59, 130, 246);
+      pdf.setLineWidth(0.3);
+      pdf.line(margin, y, margin + contentW * 0.5, y);
+      y += 8;
+
+      if (cat.type === "unit-based") {
+        for (const unit of cat.units) {
+          if (unit.beforePhotos.length === 0 && unit.afterPhotos.length === 0) continue;
+          addNewPageIfNeeded(20);
+          pdf.setFont("Sarabun", "bold");
+          pdf.setFontSize(12);
+          pdf.setTextColor(60, 60, 60);
+          pdf.text(unit.name, margin + 2, y);
+          y += 7;
+
+          if (unit.beforePhotos.length > 0) {
+            pdf.setFontSize(10);
+            pdf.setTextColor(100, 100, 100);
+            pdf.setFont("Sarabun", "normal");
+            pdf.text("ก่อน:", margin + 4, y);
+            y += 5;
+            y = await addPhotoPair(unit.beforePhotos, y);
+          }
+          if (unit.afterPhotos.length > 0) {
+            addNewPageIfNeeded(15);
+            pdf.setFontSize(10);
+            pdf.setTextColor(100, 100, 100);
+            pdf.setFont("Sarabun", "normal");
+            pdf.text("หลัง:", margin + 4, y);
+            y += 5;
+            y = await addPhotoPair(unit.afterPhotos, y);
+          }
+        }
+      } else {
+        for (const sub of cat.subSections) {
+          if (sub.photos.length === 0) continue;
+          addNewPageIfNeeded(20);
+          pdf.setFont("Sarabun", "bold");
+          pdf.setFontSize(12);
+          pdf.setTextColor(60, 60, 60);
+          pdf.text(sub.name, margin + 2, y);
+          y += 7;
+          y = await addPhotoPair(sub.photos, y);
+        }
+      }
+    }
+
+    // === CONCLUSION ===
+    let conclusionPage = 0;
+    if (data.conclusion) {
+      addNewPageIfNeeded(30);
+      conclusionPage = pdf.getNumberOfPages();
+      y += 5;
+      pdf.setFont("Sarabun", "bold");
+      pdf.setFontSize(14);
+      pdf.setTextColor(30, 58, 138);
+      pdf.text("สรุปผล", margin, y);
+      y += 8;
+      pdf.setFont("Sarabun", "normal");
+      pdf.setFontSize(11);
+      pdf.setTextColor(50, 50, 50);
+      for (const line of pdf.splitTextToSize(data.conclusion, contentW)) {
+        addNewPageIfNeeded(7);
+        pdf.text(line, margin, y);
+        y += 6;
+      }
+    }
+
+    // === FOOTER NOTE ===
+    if (data.jobInfo.footerNote) {
+      addNewPageIfNeeded(20);
+      y += 10;
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(margin, y, pageW - margin, y);
+      y += 6;
+      pdf.setFontSize(9);
+      pdf.setTextColor(120, 120, 120);
+      pdf.setFont("Sarabun", "normal");
+      for (const line of pdf.splitTextToSize(data.jobInfo.footerNote, contentW)) {
+        addNewPageIfNeeded(5);
+        pdf.text(line, pageW / 2, y, { align: "center" });
+        y += 5;
+      }
+    }
+
+    // === FILL TOC with actual page numbers ===
+    pdf.setPage(tocPageNum);
+    let tocY = tocStartY;
     pdf.setFont("Sarabun", "normal");
     pdf.setFontSize(11);
     pdf.setTextColor(50, 50, 50);
-    for (const line of pdf.splitTextToSize(data.conclusion, contentW)) {
-      addNewPageIfNeeded(7);
-      pdf.text(line, margin, y);
+    for (let i = 0; i < tocEntries.length; i++) {
+      const entry = tocEntries[i];
+      const label = `${entry.icon} ${entry.name}`;
+      const pageLabel = `หน้า ${entry.page}`;
+      pdf.text(label, margin + 4, tocY);
+      // Dotted line
+      const labelWidth = pdf.getTextWidth(label) + margin + 6;
+      const pageWidth = pdf.getTextWidth(pageLabel);
+      const dotsStart = labelWidth;
+      const dotsEnd = pageW - margin - pageWidth - 2;
+      let dotX = dotsStart;
+      pdf.setTextColor(180, 180, 180);
+      while (dotX < dotsEnd) {
+        pdf.text(".", dotX, tocY);
+        dotX += 2;
+      }
+      pdf.setTextColor(50, 50, 50);
+      pdf.text(pageLabel, pageW - margin, tocY, { align: "right" });
+      tocY += 7;
+    }
+    if (data.conclusion && conclusionPage > 0) {
+      const label = "📝 สรุปผล";
+      const pageLabel = `หน้า ${conclusionPage}`;
+      pdf.text(label, margin + 4, tocY);
+      const labelWidth = pdf.getTextWidth(label) + margin + 6;
+      const pageWidth = pdf.getTextWidth(pageLabel);
+      const dotsEnd = pageW - margin - pageWidth - 2;
+      let dotX = labelWidth;
+      pdf.setTextColor(180, 180, 180);
+      while (dotX < dotsEnd) {
+        pdf.text(".", dotX, tocY);
+        dotX += 2;
+      }
+      pdf.setTextColor(50, 50, 50);
+      pdf.text(pageLabel, pageW - margin, tocY, { align: "right" });
+    }
+  } else {
+    // No categories with photos — still render conclusion/footer
+    if (data.conclusion) {
+      addNewPageIfNeeded(30);
+      y += 5;
+      pdf.setFont("Sarabun", "bold");
+      pdf.setFontSize(14);
+      pdf.setTextColor(30, 58, 138);
+      pdf.text("สรุปผล", margin, y);
+      y += 8;
+      pdf.setFont("Sarabun", "normal");
+      pdf.setFontSize(11);
+      pdf.setTextColor(50, 50, 50);
+      for (const line of pdf.splitTextToSize(data.conclusion, contentW)) {
+        addNewPageIfNeeded(7);
+        pdf.text(line, margin, y);
+        y += 6;
+      }
+    }
+    if (data.jobInfo.footerNote) {
+      addNewPageIfNeeded(20);
+      y += 10;
+      pdf.setDrawColor(200, 200, 200);
+      pdf.line(margin, y, pageW - margin, y);
       y += 6;
+      pdf.setFontSize(9);
+      pdf.setTextColor(120, 120, 120);
+      pdf.setFont("Sarabun", "normal");
+      for (const line of pdf.splitTextToSize(data.jobInfo.footerNote, contentW)) {
+        addNewPageIfNeeded(5);
+        pdf.text(line, pageW / 2, y, { align: "center" });
+        y += 5;
+      }
     }
   }
 
-  // === FOOTER ===
-  if (data.jobInfo.footerNote) {
-    addNewPageIfNeeded(20);
-    y += 10;
-    pdf.setDrawColor(200, 200, 200);
-    pdf.line(margin, y, pageW - margin, y);
-    y += 6;
-    pdf.setFontSize(9);
-    pdf.setTextColor(120, 120, 120);
-    pdf.setFont("Sarabun", "normal");
-    for (const line of pdf.splitTextToSize(data.jobInfo.footerNote, contentW)) {
-      addNewPageIfNeeded(5);
-      pdf.text(line, pageW / 2, y, { align: "center" });
-      y += 5;
+  // === WATERMARK on all pages ===
+  const watermarkText = options?.watermarkText;
+  if (watermarkText) {
+    const totalPages = pdf.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
+      pdf.setFont("Sarabun", "bold");
+      pdf.setFontSize(50);
+      pdf.setTextColor(200, 200, 200);
+      pdf.saveGraphicsState();
+      // @ts-ignore - jsPDF internal for rotation
+      const gState = pdf.GState({ opacity: 0.15 });
+      pdf.setGState(gState);
+      pdf.text(watermarkText, pageW / 2, pageH / 2, {
+        align: "center",
+        angle: 45,
+      });
+      pdf.restoreGraphicsState();
     }
+  }
+
+  // === PAGE NUMBERS on all pages ===
+  const totalPages = pdf.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    pdf.setPage(p);
+    pdf.setFont("Sarabun", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(150, 150, 150);
+    pdf.text(`หน้า ${p} / ${totalPages}`, pageW / 2, pageH - 8, { align: "center" });
   }
 
   const fileName = `${data.jobInfo.clientName || "report"}_${new Date().toLocaleDateString("th-TH")}.pdf`;
