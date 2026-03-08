@@ -160,7 +160,8 @@ export async function downloadPDF(data: ReportData) {
           addNewPageIfNeeded(15);
           pdf.setFontSize(10);
           pdf.setTextColor(100, 100, 100);
-          pdf.text("After:", margin + 4, y);
+          pdf.setFont("Sarabun", "normal");
+          pdf.text("หลัง:", margin + 4, y);
           y += 5;
           y = await addPhotoPair(unit.afterPhotos, y);
         }
