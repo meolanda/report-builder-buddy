@@ -106,10 +106,10 @@ export async function downloadPDF(data: ReportData) {
   pdf.setFontSize(11);
   pdf.setTextColor(50, 50, 50);
   const infoLines = [
-    ["Client", data.jobInfo.clientName],
-    ["Date", data.jobInfo.dateTime],
-    ["Location", data.jobInfo.location],
-    ["Reporter", data.jobInfo.reporterName],
+    ["ลูกค้า", data.jobInfo.clientName],
+    ["วันที่", data.jobInfo.dateTime],
+    ["สถานที่", data.jobInfo.location],
+    ["ผู้รายงาน", data.jobInfo.reporterName],
   ].filter(([, v]) => v);
   for (const [label, value] of infoLines) {
     pdf.setFont("Sarabun", "bold");
