@@ -7,6 +7,7 @@ import CategorySection from "@/components/CategorySection";
 import ConclusionSection from "@/components/ConclusionSection";
 import PDFPreview from "@/components/PDFPreview";
 import { JobInfo, Category, ReportData, DEFAULT_CATEGORIES } from "@/types/report";
+import defaultLogo from "@/assets/default-logo.jpg";
 import { downloadPDF } from "@/utils/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
 import { useReportStorage } from "@/hooks/useReportStorage";
