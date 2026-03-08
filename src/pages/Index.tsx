@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { FileDown, Loader2, Eye, Save, History, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -7,11 +7,16 @@ import CategorySection from "@/components/CategorySection";
 import ConclusionSection from "@/components/ConclusionSection";
 import PDFPreview from "@/components/PDFPreview";
 import AddCategoryDialog from "@/components/AddCategoryDialog";
+import ThemeToggle from "@/components/ThemeToggle";
 import { JobInfo, Category, ReportData, DEFAULT_CATEGORIES } from "@/types/report";
 import defaultLogo from "@/assets/default-logo.jpg";
 import { downloadPDF } from "@/utils/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
 import { useReportStorage } from "@/hooks/useReportStorage";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 
 const Index = () => {
   const { toast } = useToast();
@@ -22,6 +27,9 @@ const Index = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [watermarkText, setWatermarkText] = useState("");
+  const [reportId, setReportId] = useState<string | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   const [jobInfo, setJobInfo] = useState<JobInfo>({
     clientName: "",
@@ -55,9 +63,10 @@ const Index = () => {
   const [conclusion, setConclusion] = useState("");
 
   useEffect(() => {
-    const reportId = searchParams.get("reportId");
-    if (reportId) {
-      loadReport(reportId).then((data) => {
+    const id = searchParams.get("reportId");
+    if (id) {
+      setReportId(id);
+      loadReport(id).then((data) => {
         if (data) {
           setJobInfo(data.jobInfo);
           setCategories(data.categories.length > 0 ? data.categories : JSON.parse(JSON.stringify(DEFAULT_CATEGORIES)));
@@ -67,6 +76,37 @@ const Index = () => {
       });
     }
   }, [searchParams]);
+
+  // Auto-save
+  const autoSaveRef = useRef<NodeJS.Timeout | null>(null);
+  const hasDataRef = useRef(false);
+
+  // Track if user has entered any data
+  useEffect(() => {
+    const hasPhotos = categories.some((cat) => {
+      if (cat.type === "unit-based") return cat.units.some((u) => u.beforePhotos.length > 0 || u.afterPhotos.length > 0);
+      return cat.subSections.some((s) => s.photos.length > 0);
+    });
+    hasDataRef.current = hasPhotos || !!jobInfo.clientName || !!conclusion;
+  }, [categories, jobInfo.clientName, conclusion]);
+
+  const doAutoSave = useCallback(async () => {
+    if (!hasDataRef.current || isSaving) return;
+    try {
+      const id = await saveReport(jobInfo, categories, conclusion, reportId || undefined);
+      if (!reportId) setReportId(id);
+      setLastSavedAt(new Date());
+    } catch {
+      // silent fail for auto-save
+    }
+  }, [jobInfo, categories, conclusion, reportId, isSaving, saveReport]);
+
+  useEffect(() => {
+    autoSaveRef.current = setInterval(doAutoSave, AUTO_SAVE_INTERVAL);
+    return () => {
+      if (autoSaveRef.current) clearInterval(autoSaveRef.current);
+    };
+  }, [doAutoSave]);
 
   const updateCategory = (updated: Category) => {
     setCategories(categories.map((c) => (c.id === updated.id ? updated : c)));
@@ -97,7 +137,10 @@ const Index = () => {
     }
     setIsGenerating(true);
     try {
-      await downloadPDF({ jobInfo, categories, conclusion });
+      await downloadPDF(
+        { jobInfo, categories, conclusion },
+        { watermarkText: watermarkText.trim() || undefined }
+      );
       toast({ title: "สร้าง PDF สำเร็จ" });
     } catch (error) {
       console.error(error);
@@ -113,6 +156,12 @@ const Index = () => {
       return;
     }
     setShowPreview(true);
+  };
+
+  const handleManualSave = async () => {
+    const id = await saveReport(jobInfo, categories, conclusion, reportId || undefined);
+    if (!reportId) setReportId(id);
+    setLastSavedAt(new Date());
   };
 
   const reportData: ReportData = { jobInfo, categories, conclusion };
@@ -131,10 +180,13 @@ const Index = () => {
               <p className="text-sm text-muted-foreground">สร้างรายงานรูปภาพเป็น PDF อย่างมืออาชีพ</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={() => navigate("/history")}>
-            <History className="mr-1 h-4 w-4" />
-            ประวัติ
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="outline" size="sm" onClick={() => navigate("/history")}>
+              <History className="mr-1 h-4 w-4" />
+              ประวัติ
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -176,12 +228,23 @@ const Index = () => {
               onFooterNoteChange={(note) => setJobInfo({ ...jobInfo, footerNote: note })}
             />
 
+            {/* Watermark */}
+            <div className="rounded-lg border border-border bg-card p-4">
+              <Label className="text-sm font-medium">💧 ลายน้ำ (Watermark)</Label>
+              <Input
+                placeholder="เช่น CONFIDENTIAL, ลับเฉพาะ (เว้นว่างถ้าไม่ต้องการ)"
+                value={watermarkText}
+                onChange={(e) => setWatermarkText(e.target.value)}
+                className="mt-2"
+              />
+            </div>
+
             {/* Actions */}
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button variant="outline" onClick={handlePreview}>
                 <Eye className="mr-1 h-4 w-4" /> Preview
               </Button>
-              <Button variant="secondary" onClick={() => saveReport(jobInfo, categories, conclusion)} disabled={isSaving}>
+              <Button variant="secondary" onClick={handleManualSave} disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
                 {isSaving ? "กำลังบันทึก..." : "บันทึก"}
               </Button>
@@ -189,6 +252,11 @@ const Index = () => {
                 {isGenerating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileDown className="mr-1 h-4 w-4" />}
                 {isGenerating ? "กำลังสร้าง PDF..." : "สร้างรายงาน PDF"}
               </Button>
+              {lastSavedAt && (
+                <span className="text-xs text-muted-foreground">
+                  บันทึกล่าสุด: {lastSavedAt.toLocaleTimeString("th-TH")}
+                </span>
+              )}
             </div>
           </div>
         )}
