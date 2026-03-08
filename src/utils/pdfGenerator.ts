@@ -112,9 +112,9 @@ export async function downloadPDF(data: ReportData) {
     ["Reporter", data.jobInfo.reporterName],
   ].filter(([, v]) => v);
   for (const [label, value] of infoLines) {
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("Sarabun", "bold");
     pdf.text(`${label}: `, margin, y);
-    pdf.setFont("helvetica", "normal");
+    pdf.setFont("Sarabun", "normal");
     pdf.text(value, margin + 30, y);
     y += 7;
   }
