@@ -73,7 +73,7 @@ export async function downloadPDF(data: ReportData) {
         if (photo.caption) {
           pdf.setFontSize(8);
           pdf.setTextColor(80, 80, 80);
-          pdf.setFont("helvetica", "normal");
+          pdf.setFont("Sarabun", "normal");
           pdf.text(pdf.splitTextToSize(photo.caption, photoW), x, y + photoH + 4);
         }
       }
