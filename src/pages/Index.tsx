@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { FileDown, Loader2, Eye, Save, History } from "lucide-react";
+import { FileDown, Loader2, Eye, Save, History, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import JobInfoForm from "@/components/JobInfoForm";
 import CategorySection from "@/components/CategorySection";
 import ConclusionSection from "@/components/ConclusionSection";
 import PDFPreview from "@/components/PDFPreview";
+import AddCategoryDialog from "@/components/AddCategoryDialog";
 import { JobInfo, Category, ReportData, DEFAULT_CATEGORIES } from "@/types/report";
 import defaultLogo from "@/assets/default-logo.jpg";
 import { downloadPDF } from "@/utils/pdfGenerator";
