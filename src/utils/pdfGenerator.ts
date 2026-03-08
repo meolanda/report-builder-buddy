@@ -170,7 +170,7 @@ export async function downloadPDF(data: ReportData) {
       for (const sub of cat.subSections) {
         if (sub.photos.length === 0) continue;
         addNewPageIfNeeded(20);
-        pdf.setFont("helvetica", "bold");
+        pdf.setFont("Sarabun", "bold");
         pdf.setFontSize(12);
         pdf.setTextColor(60, 60, 60);
         pdf.text(sub.name, margin + 2, y);
