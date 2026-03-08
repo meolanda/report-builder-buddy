@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { FileDown, Loader2, Eye, Save, History } from "lucide-react";
+import { FileDown, Loader2, Eye, Save, History, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import JobInfoForm from "@/components/JobInfoForm";
 import CategorySection from "@/components/CategorySection";
 import ConclusionSection from "@/components/ConclusionSection";
 import PDFPreview from "@/components/PDFPreview";
+import AddCategoryDialog from "@/components/AddCategoryDialog";
 import { JobInfo, Category, ReportData, DEFAULT_CATEGORIES } from "@/types/report";
 import defaultLogo from "@/assets/default-logo.jpg";
 import { downloadPDF } from "@/utils/pdfGenerator";
@@ -20,6 +21,7 @@ const Index = () => {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showAddCategory, setShowAddCategory] = useState(false);
 
   const [jobInfo, setJobInfo] = useState<JobInfo>({
     clientName: "",
@@ -69,6 +71,16 @@ const Index = () => {
   const updateCategory = (updated: Category) => {
     setCategories(categories.map((c) => (c.id === updated.id ? updated : c)));
   };
+
+  const addCategory = (cat: Category) => {
+    setCategories([...categories, cat]);
+  };
+
+  const deleteCategory = (catId: string) => {
+    setCategories(categories.filter((c) => c.id !== catId));
+  };
+
+  const DEFAULT_IDS = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
 
   const getTotalPhotos = () =>
     categories.reduce((sum, cat) => {
@@ -143,8 +155,18 @@ const Index = () => {
                 รูปภาพในรายงาน <span className="text-sm font-normal text-muted-foreground">({getTotalPhotos()} รูป)</span>
               </h2>
               {categories.map((cat) => (
-                <CategorySection key={cat.id} category={cat} onUpdate={updateCategory} />
+                <CategorySection
+                  key={cat.id}
+                  category={cat}
+                  onUpdate={updateCategory}
+                  isCustom={!DEFAULT_IDS.has(cat.id)}
+                  onDelete={() => deleteCategory(cat.id)}
+                />
               ))}
+              <Button variant="outline" className="w-full" onClick={() => setShowAddCategory(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                เพิ่มหมวดหมู่ใหม่
+              </Button>
             </div>
 
             <ConclusionSection
@@ -180,6 +202,7 @@ const Index = () => {
       </div>
 
       {showPreview && <PDFPreview data={reportData} onClose={() => setShowPreview(false)} />}
+      <AddCategoryDialog open={showAddCategory} onClose={() => setShowAddCategory(false)} onAdd={addCategory} />
     </div>
   );
 };
