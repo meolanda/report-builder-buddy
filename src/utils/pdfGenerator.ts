@@ -128,7 +128,7 @@ export async function downloadPDF(data: ReportData) {
 
     addNewPageIfNeeded(25);
     y += 5;
-    pdf.setFont("helvetica", "bold");
+    pdf.setFont("Sarabun", "bold");
     pdf.setFontSize(16);
     pdf.setTextColor(30, 58, 138);
     pdf.text(`${cat.icon} ${cat.name}`, margin, y);
