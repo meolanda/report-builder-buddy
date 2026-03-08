@@ -7,6 +7,7 @@ import CategorySection from "@/components/CategorySection";
 import ConclusionSection from "@/components/ConclusionSection";
 import PDFPreview from "@/components/PDFPreview";
 import { JobInfo, Category, ReportData, DEFAULT_CATEGORIES } from "@/types/report";
+import defaultLogo from "@/assets/default-logo.jpg";
 import { downloadPDF } from "@/utils/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
 import { useReportStorage } from "@/hooks/useReportStorage";
@@ -29,6 +30,22 @@ const Index = () => {
     footerNote: "ขอบคุณที่ไว้วางใจใช้บริการ\nหากพบปัญหาการใช้งาน กรุณาติดต่อ...",
     subject: "",
   });
+
+  // Load default logo on mount
+  useEffect(() => {
+    if (!jobInfo.logo) {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        canvas.getContext("2d")?.drawImage(img, 0, 0);
+        setJobInfo((prev) => ({ ...prev, logo: canvas.toDataURL("image/jpeg") }));
+      };
+      img.src = defaultLogo;
+    }
+  }, []);
 
   const [categories, setCategories] = useState<Category[]>(
     JSON.parse(JSON.stringify(DEFAULT_CATEGORIES))
