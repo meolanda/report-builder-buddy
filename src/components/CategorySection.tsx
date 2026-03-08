@@ -93,6 +93,8 @@ const UnitBasedSection = ({ category, onUpdate }: Props) => {
 
 const FixedSubSection = ({ category, onUpdate }: Props) => {
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set(category.subSections.map((s) => s.id)));
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   const toggleSub = (id: string) => {
     setOpenSubs((prev) => {
@@ -100,6 +102,37 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  const addSubSection = () => {
+    const num = category.subSections.length + 1;
+    const newSub = {
+      id: `${category.id}-sub-${Date.now()}`,
+      name: `หัวข้อย่อย ${num}`,
+      photos: [],
+    };
+    onUpdate({ ...category, subSections: [...category.subSections, newSub] });
+    setOpenSubs((prev) => new Set(prev).add(newSub.id));
+  };
+
+  const deleteSubSection = (subId: string) => {
+    if (category.subSections.length <= 1) return;
+    onUpdate({ ...category, subSections: category.subSections.filter((s) => s.id !== subId) });
+  };
+
+  const startEdit = (sub: { id: string; name: string }) => {
+    setEditingId(sub.id);
+    setEditName(sub.name);
+  };
+
+  const saveEdit = (subId: string) => {
+    if (editName.trim()) {
+      onUpdate({
+        ...category,
+        subSections: category.subSections.map((s) => (s.id === subId ? { ...s, name: editName.trim() } : s)),
+      });
+    }
+    setEditingId(null);
   };
 
   return (
@@ -112,8 +145,29 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
                 {openSubs.has(sub.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>
-            <span className="flex-1 text-sm font-medium">{sub.name}</span>
+            {editingId === sub.id ? (
+              <input
+                className="flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={() => saveEdit(sub.id)}
+                onKeyDown={(e) => e.key === "Enter" && saveEdit(sub.id)}
+                autoFocus
+              />
+            ) : (
+              <span
+                className="flex-1 cursor-pointer text-sm font-medium hover:text-primary"
+                onDoubleClick={() => startEdit(sub)}
+              >
+                {sub.name}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground">{sub.photos.length} รูป</span>
+            {category.subSections.length > 1 && (
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteSubSection(sub.id)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
           <CollapsibleContent className="ml-4 mt-2 border-l-2 border-border pl-4">
             <PhotoGrid
@@ -128,6 +182,11 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
           </CollapsibleContent>
         </Collapsible>
       ))}
+
+      <Button variant="outline" size="sm" className="w-full" onClick={addSubSection}>
+        <Plus className="mr-1 h-3.5 w-3.5" />
+        เพิ่มหัวข้อย่อย
+      </Button>
     </div>
   );
 };
