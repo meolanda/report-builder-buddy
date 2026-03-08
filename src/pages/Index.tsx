@@ -155,8 +155,18 @@ const Index = () => {
                 รูปภาพในรายงาน <span className="text-sm font-normal text-muted-foreground">({getTotalPhotos()} รูป)</span>
               </h2>
               {categories.map((cat) => (
-                <CategorySection key={cat.id} category={cat} onUpdate={updateCategory} />
+                <CategorySection
+                  key={cat.id}
+                  category={cat}
+                  onUpdate={updateCategory}
+                  isCustom={!DEFAULT_IDS.has(cat.id)}
+                  onDelete={() => deleteCategory(cat.id)}
+                />
               ))}
+              <Button variant="outline" className="w-full" onClick={() => setShowAddCategory(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                เพิ่มหมวดหมู่ใหม่
+              </Button>
             </div>
 
             <ConclusionSection
