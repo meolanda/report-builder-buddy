@@ -93,7 +93,7 @@ export async function downloadPDF(data: ReportData) {
     } catch { y += 5; }
   }
 
-  pdf.setFont("helvetica", "bold");
+  pdf.setFont("Sarabun", "bold");
   pdf.setFontSize(22);
   pdf.setTextColor(30, 58, 138);
   pdf.text(data.jobInfo.subject || "Report", pageW / 2, y, { align: "center" });
