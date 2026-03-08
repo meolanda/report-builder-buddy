@@ -72,6 +72,16 @@ const Index = () => {
     setCategories(categories.map((c) => (c.id === updated.id ? updated : c)));
   };
 
+  const addCategory = (cat: Category) => {
+    setCategories([...categories, cat]);
+  };
+
+  const deleteCategory = (catId: string) => {
+    setCategories(categories.filter((c) => c.id !== catId));
+  };
+
+  const DEFAULT_IDS = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
+
   const getTotalPhotos = () =>
     categories.reduce((sum, cat) => {
       if (cat.type === "unit-based") {
