@@ -227,9 +227,9 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
     const x     = startX + j * (cellW + IMG_GAP);
     const b64   = IMG_B64_CACHE.get(photo.url);
 
-    // Photo card
-    fc(pdf, BGCARD); dc(pdf, BORDER); pdf.setLineWidth(0.2);
-    pdf.roundedRect(x, y, cellW, IMG_H, 2, 2, "FD");
+    // Photo border only (no fill background)
+    dc(pdf, [200, 205, 215]); pdf.setLineWidth(0.25);
+    pdf.rect(x, y, cellW, IMG_H);
 
     if (b64) {
       try {
@@ -431,8 +431,10 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         coverTocY   = ry;
         coverPageNo = pageNo;
 
-        // Reserve TOC lines
-        ry += catsWithPhotos.length * 8 + (data.conclusion ? 8 : 0) + 4;
+        // Reserve TOC lines (category rows + sub-section rows)
+        const subCount = catsWithPhotos.reduce((n, cat) =>
+          n + (cat.type === "fixed-sub" ? cat.subSections.filter(s => s.photos.length > 0).length : 0), 0);
+        ry += catsWithPhotos.length * 8 + subCount * 6.5 + (data.conclusion ? 8 : 0) + 4;
 
         // Bottom bar
         fc(pdf, NAVY); pdf.rect(0, PH - 7, PW, 7, "F");
@@ -509,36 +511,45 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   pdf.setPage(coverPageNo);
   let ty = coverTocY;
 
-  for (let ci = 0; ci < catsWithPhotos.length; ci++) {
-    const cat     = catsWithPhotos[ci];
-    const pg      = catPageMap.get(ci) ?? 1;
-    const label   = `${cat.icon}  ${cat.name}`;
-    const pgLabel = `หน้า ${pg}`;
-
-    font(pdf, "normal", 10.5); tc(pdf, DARK);
-    pdf.text(label, MARGIN + 4, ty);
-
-    const lx = MARGIN + 4 + pdf.getTextWidth(label) + 3;
+  const drawTocRow = (label: string, pgLabel: string, indent: number, bold: boolean) => {
+    font(pdf, bold ? "bold" : "normal", bold ? 10.5 : 9.5);
+    tc(pdf, bold ? DARK : MID);
+    pdf.text(label, MARGIN + 4 + indent, ty);
+    const lx = MARGIN + 4 + indent + pdf.getTextWidth(label) + 3;
     const rx = PW - MARGIN - pdf.getTextWidth(pgLabel) - 3;
     tc(pdf, BORDER);
     for (let dx = lx; dx < rx; dx += 2.2) pdf.text(".", dx, ty);
-
-    font(pdf, "bold", 10.5); tc(pdf, BLUE);
+    font(pdf, "bold", bold ? 10.5 : 9.5);
+    tc(pdf, BLUE);
     pdf.text(pgLabel, PW - MARGIN, ty, { align: "right" });
-    ty += 8;
+    ty += bold ? 8 : 6.5;
+  };
+
+  for (let ci = 0; ci < catsWithPhotos.length; ci++) {
+    const cat = catsWithPhotos[ci];
+    const pg  = catPageMap.get(ci) ?? 1;
+    drawTocRow(`${cat.icon}  ${cat.name}`, `หน้า ${pg}`, 0, true);
+
+    // Sub-sections for fixed-sub categories
+    if (cat.type === "fixed-sub") {
+      for (const sub of cat.subSections) {
+        if (!sub.photos.length) continue;
+        // find which page this sub is on from the page plan
+        const subPage = (() => {
+          for (let pi2 = 0; pi2 < pages.length; pi2++) {
+            if (pages[pi2].blocks.some(b => b.t === "sub" && b.label === sub.name))
+              return pi2 + 1;
+          }
+          return pg;
+        })();
+        drawTocRow(`  •  ${sub.name}`, `หน้า ${subPage}`, 6, false);
+      }
+    }
   }
 
   if (data.conclusion?.trim()) {
     const cPage = pages.findIndex(p => p.blocks.some(b => b.t === "conclusion")) + 1;
-    const pgLabel = `หน้า ${cPage}`;
-    font(pdf, "normal", 10.5); tc(pdf, DARK);
-    pdf.text("📝  สรุปผล", MARGIN + 4, ty);
-    const lx = MARGIN + 4 + pdf.getTextWidth("📝  สรุปผล") + 3;
-    const rx = PW - MARGIN - pdf.getTextWidth(pgLabel) - 3;
-    tc(pdf, BORDER);
-    for (let dx = lx; dx < rx; dx += 2.2) pdf.text(".", dx, ty);
-    font(pdf, "bold", 10.5); tc(pdf, BLUE);
-    pdf.text(pgLabel, PW - MARGIN, ty, { align: "right" });
+    drawTocRow("📝  สรุปผล", `หน้า ${cPage}`, 0, true);
   }
 
   // ── Watermark ────────────────────────────────────────────────────────────────
