@@ -337,19 +337,22 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
         const addGroup = (photos: PhotoItem[], pill: string, color: [number,number,number], forceNewPage = false) => {
           if (!photos.length) return;
-          // ก่อน/หลัง แยกหน้าเสมอ
           if (forceNewPage) {
+            // หลัง: ขึ้นหน้าใหม่ มีแค่ pill ไม่ repeat header → เหลือที่ 3 แถว
             newPage();
-            push({ t: "hdr", catIdx: ci }, 16);
-            push({ t: "sub", label: unit.name }, 12);
-          } else if (!fits(8 + ROW_H)) {
-            newPage();
-            push({ t: "hdr", catIdx: ci }, 16);
-            push({ t: "sub", label: unit.name }, 12);
+            push({ t: "pill", label: pill, color }, 7);
+          } else {
+            // ก่อน: ถ้าไม่พอก็ขึ้นหน้าใหม่พร้อม header
+            if (!fits(16 + 12 + 7 + ROW_H)) {
+              newPage();
+              push({ t: "hdr", catIdx: ci }, 16);
+              push({ t: "sub", label: unit.name }, 12);
+            }
+            push({ t: "pill", label: pill, color }, 7);
           }
-          push({ t: "pill", label: pill, color }, 8);
           for (let i = 0; i < photos.length; i += 2) {
-            if (!fits(ROW_H)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
+            // overflow ภายใน group: ขึ้นหน้าใหม่โดยไม่ใส่ header → 3 แถวเต็ม
+            if (!fits(ROW_H)) { newPage(); }
             push({ t: "row", photos: photos.slice(i, i + 2) }, ROW_H);
           }
           push({ t: "gap", h: 3 }, 3);
@@ -361,10 +364,10 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
     } else {
       for (const sub of cat.subSections) {
         if (!sub.photos.length) continue;
-        if (!fits(SUB_MIN)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
+        if (!fits(12 + ROW_H)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
         push({ t: "sub", label: sub.name }, 12);
         for (let i = 0; i < sub.photos.length; i += 2) {
-          if (!fits(ROW_H)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
+          if (!fits(ROW_H)) { newPage(); } // overflow: no header → 3 rows fit
           push({ t: "row", photos: sub.photos.slice(i, i + 2) }, ROW_H);
         }
         push({ t: "gap", h: 4 }, 4);
