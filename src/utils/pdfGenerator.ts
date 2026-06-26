@@ -159,13 +159,13 @@ async function drawHeader(pdf: jsPDF, data: ReportData) {
   pdf.setLineWidth(0.3);
   pdf.line(0, IMG_HDR_H, PW, IMG_HDR_H);
 
-  const logoB64 = data.jobInfo.logo ? IMG_B64_CACHE.get(data.jobInfo.logo) : undefined;
-  if (logoB64) {
+  if (data.jobInfo.logo) {
+    const lsrc = IMG_B64_CACHE.get(data.jobInfo.logo) ?? data.jobInfo.logo;
     try {
-      const aspect = await getAspect(logoB64);
-      const lh = IMG_HDR_H - 6;            // fit within strip with padding
+      const aspect = await getAspect(lsrc);
+      const lh = IMG_HDR_H - 6;
       const lw = aspect * lh;
-      pdf.addImage(logoB64, imgFormat(logoB64), MARGIN, 3, lw, lh);
+      pdf.addImage(lsrc, imgFormat(lsrc), MARGIN, 3, lw, lh);
     } catch { /* skip */ }
   }
 
