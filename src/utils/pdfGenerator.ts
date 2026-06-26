@@ -120,46 +120,42 @@ function font(pdf: jsPDF, w: "normal"|"bold", size: number) {
   pdf.setFontSize(size);
 }
 
-// Running header (every content page)
+// Running header (every content page) — logo strip + navy info bar
 async function drawHeader(pdf: jsPDF, data: ReportData) {
-  // Header image (full width)
+  // ── Logo strip (white background) ──────────────────────────────────────────
+  fc(pdf, WHITE);
+  pdf.rect(0, 0, PW, IMG_HDR_H, "F");
+
+  // light bottom border of logo strip
+  dc(pdf, [220, 225, 235]);
+  pdf.setLineWidth(0.3);
+  pdf.line(0, IMG_HDR_H, PW, IMG_HDR_H);
+
   const logoB64 = data.jobInfo.logo ? IMG_B64_CACHE.get(data.jobInfo.logo) : undefined;
   if (logoB64) {
     try {
       const aspect = await getAspect(logoB64);
-      const lh = IMG_HDR_H, lw = aspect * lh;
-      // stretch a colored bar as base
-      fc(pdf, [245, 247, 250]);
-      pdf.rect(0, 0, PW, IMG_HDR_H, "F");
-      // logo left-aligned
-      pdf.addImage(logoB64, "PNG", MARGIN, (IMG_HDR_H - lh) / 2, lw, lh);
-    } catch {
-      fc(pdf, [245, 247, 250]);
-      pdf.rect(0, 0, PW, IMG_HDR_H, "F");
-    }
-  } else {
-    fc(pdf, [245, 247, 250]);
-    pdf.rect(0, 0, PW, IMG_HDR_H, "F");
+      const lh = IMG_HDR_H - 6;            // fit within strip with padding
+      const lw = aspect * lh;
+      pdf.addImage(logoB64, "PNG", MARGIN, 3, lw, lh);
+    } catch { /* skip */ }
   }
 
-  // Thin accent line under logo area
-  dc(pdf, NAVY);
-  pdf.setLineWidth(0.5);
-  pdf.line(0, IMG_HDR_H, PW, IMG_HDR_H);
+  // Subject text right-aligned in logo strip
+  if (data.jobInfo.subject) {
+    font(pdf, "bold", 10);
+    tc(pdf, NAVY);
+    pdf.text(data.jobInfo.subject, PW - MARGIN, IMG_HDR_H / 2 + 2, { align: "right" });
+  }
 
-  // Navy info bar
+  // ── Navy info bar ───────────────────────────────────────────────────────────
   fc(pdf, NAVY);
   pdf.rect(0, IMG_HDR_H, PW, INFO_BAR_H, "F");
 
   tc(pdf, WHITE);
-  let iy = IMG_HDR_H + 7;
-
-  if (data.jobInfo.subject) {
-    font(pdf, "bold", 10);
-    pdf.text(data.jobInfo.subject, PW / 2, iy, { align: "center" });
-  }
-  iy += 7;
+  let iy = IMG_HDR_H + 8;
   font(pdf, "normal", 8.5);
+
   if (data.jobInfo.clientName)
     pdf.text(`ลูกค้า: ${data.jobInfo.clientName}`, MARGIN, iy);
   if (data.jobInfo.dateTime)
@@ -167,17 +163,18 @@ async function drawHeader(pdf: jsPDF, data: ReportData) {
   iy += 6;
   if (data.jobInfo.location)
     pdf.text(`สถานที่: ${data.jobInfo.location}`, MARGIN, iy);
+  if (data.jobInfo.reporterName)
+    pdf.text(`ผู้รายงาน: ${data.jobInfo.reporterName}`, PW - MARGIN, iy, { align: "right" });
 }
 
 // Footer
-function drawFooter(pdf: jsPDF, page: number, total: number, reporter: string) {
+function drawFooter(pdf: jsPDF, page: number, total: number) {
   const y = PH - MARGIN + 3;
   dc(pdf, BORDER);
   pdf.setLineWidth(0.25);
   pdf.line(MARGIN, y - 4, PW - MARGIN, y - 4);
   font(pdf, "normal", 7.5);
   tc(pdf, LIGHT);
-  if (reporter) pdf.text(`ผู้รายงาน: ${reporter}`, MARGIN, y);
   pdf.text(`หน้า ${page} / ${total}`, PW / 2, y, { align: "center" });
 }
 
@@ -195,12 +192,12 @@ function drawSectionBanner(pdf: jsPDF, icon: string, name: string, y: number): n
 // Sub-header (unit / subsection)
 function drawSubHeader(pdf: jsPDF, name: string, y: number): number {
   const bh = 9;
-  fc(pdf, LBLUE); dc(pdf, BLUE); pdf.setLineWidth(0.15);
-  pdf.rect(MARGIN, y, CW, bh, "FD");
-  fc(pdf, BLUE);  pdf.rect(MARGIN, y, 3, bh, "F");
+  fc(pdf, LBLUE); pdf.setDrawColor(0,0,0,0); // no border
+  pdf.rect(MARGIN, y, CW, bh, "F");
+  fc(pdf, BLUE);  pdf.rect(MARGIN, y, 3.5, bh, "F");
   font(pdf, "bold", 10.5);
   tc(pdf, NAVY);
-  pdf.text(name, MARGIN + 6, y + 6.5);
+  pdf.text(name, MARGIN + 7, y + 6.5);
   return bh;
 }
 
@@ -365,7 +362,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
     if (!page.isCover) {
       await drawHeader(pdf, data);
-      drawFooter(pdf, pageNo, totalPages, data.jobInfo.reporterName || "");
+      drawFooter(pdf, pageNo, totalPages);
     }
 
     for (const b of page.blocks) {
@@ -476,7 +473,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
       // ── Conclusion ───────────────────────────────────────────────────────────
       else if (b.t === "conclusion") {
         await drawHeader(pdf, data);
-        drawFooter(pdf, pageNo, totalPages, data.jobInfo.reporterName || "");
+        drawFooter(pdf, pageNo, totalPages);
         ry = CONTENT_TOP;
         const bh = drawSectionBanner(pdf, "📝", "สรุปผลการทำงาน", ry);
         ry += bh + 10;
