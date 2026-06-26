@@ -95,6 +95,12 @@ async function getAspect(b64: string): Promise<number> {
   });
 }
 
+function imgFormat(b64: string): string {
+  if (b64.includes("data:image/png"))  return "PNG";
+  if (b64.includes("data:image/webp")) return "WEBP";
+  return "JPEG";
+}
+
 async function preloadAll(data: ReportData): Promise<Map<string, string>> {
   const urls: string[] = [];
   if (data.jobInfo.logo) urls.push(data.jobInfo.logo);
@@ -137,7 +143,7 @@ async function drawHeader(pdf: jsPDF, data: ReportData) {
       const aspect = await getAspect(logoB64);
       const lh = IMG_HDR_H - 6;            // fit within strip with padding
       const lw = aspect * lh;
-      pdf.addImage(logoB64, "PNG", MARGIN, 3, lw, lh);
+      pdf.addImage(logoB64, imgFormat(logoB64), MARGIN, 3, lw, lh);
     } catch { /* skip */ }
   }
 
@@ -233,9 +239,9 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
         const aspect = await getAspect(b64);
         let dw = cellW - 2, dh = dw / aspect;
         if (dh > IMG_H - 2) { dh = IMG_H - 2; dw = dh * aspect; }
-        pdf.addImage(b64, "JPEG",
+        pdf.addImage(b64, imgFormat(b64),
           x + (cellW - dw) / 2,
-          y + (IMG_H  - dh) / 2,
+          y + (IMG_H - dh) / 2,
           dw, dh);
       } catch { /* placeholder already drawn */ }
     } else {
@@ -381,7 +387,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
             try {
               const asp = await getAspect(lb64);
               const lh = 20, lw = asp * lh;
-              pdf.addImage(lb64, "PNG", (PW - lw) / 2, ry, lw, lh);
+              pdf.addImage(lb64, imgFormat(lb64), (PW - lw) / 2, ry, lw, lh);
               ry += lh + 8;
             } catch { ry += 5; }
           }
