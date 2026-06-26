@@ -14,11 +14,11 @@ const FTR_H     = 12;
 const CONTENT_TOP    = HDR_H + MARGIN;       // y where content starts (non-cover)
 const CONTENT_BOTTOM = PH - FTR_H - MARGIN;
 
-// Photo grid
+// Photo grid — 3 rows × 2 cols = 6 photos per page
 const IMG_GAP   = 5;
 const IMG_W     = (CW - IMG_GAP) / 2;       // ~87.5mm
-const IMG_H     = IMG_W * 0.75;             // 4:3 ratio ≈ 65.6mm
-const ROW_H     = IMG_H + 10;               // photo row + caption space
+const IMG_H     = 58;                        // fixed 58mm → 3 rows fit in 206mm usable
+const ROW_H     = IMG_H + 7;                // photo row + caption space ≈ 65mm
 
 // Minimum space before starting a section / subsection (header + 1 photo row)
 const SEC_MIN   = 16 + ROW_H;
@@ -335,9 +335,18 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         if (!fits(SUB_MIN)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
         push({ t: "sub", label: unit.name }, 12);
 
-        const addGroup = (photos: PhotoItem[], pill: string, color: [number,number,number]) => {
+        const addGroup = (photos: PhotoItem[], pill: string, color: [number,number,number], forceNewPage = false) => {
           if (!photos.length) return;
-          if (!fits(8 + ROW_H)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); push({ t: "sub", label: unit.name }, 12); }
+          // ก่อน/หลัง แยกหน้าเสมอ
+          if (forceNewPage) {
+            newPage();
+            push({ t: "hdr", catIdx: ci }, 16);
+            push({ t: "sub", label: unit.name }, 12);
+          } else if (!fits(8 + ROW_H)) {
+            newPage();
+            push({ t: "hdr", catIdx: ci }, 16);
+            push({ t: "sub", label: unit.name }, 12);
+          }
           push({ t: "pill", label: pill, color }, 8);
           for (let i = 0; i < photos.length; i += 2) {
             if (!fits(ROW_H)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
@@ -345,8 +354,8 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
           }
           push({ t: "gap", h: 3 }, 3);
         };
-        addGroup(unit.beforePhotos, "ก่อน", BLUE);
-        addGroup(unit.afterPhotos,  "หลัง", GREEN);
+        addGroup(unit.beforePhotos, "ก่อน", BLUE, false);
+        addGroup(unit.afterPhotos,  "หลัง", GREEN, unit.beforePhotos.length > 0);
         push({ t: "gap", h: 4 }, 4);
       }
     } else {
