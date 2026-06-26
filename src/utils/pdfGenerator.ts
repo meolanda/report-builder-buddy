@@ -70,6 +70,8 @@ async function toB64(url: string): Promise<string> {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
   if (IMG_B64_CACHE.has(url)) return IMG_B64_CACHE.get(url)!;
+
+  // Method 1: fetch + FileReader
   try {
     const res  = await fetch(url, { mode: "cors" });
     const blob = await res.blob();
@@ -81,9 +83,29 @@ async function toB64(url: string): Promise<string> {
     });
     IMG_B64_CACHE.set(url, b64);
     return b64;
-  } catch {
-    return url;
-  }
+  } catch { /* fall through */ }
+
+  // Method 2: Image + canvas (handles CORS-restricted storage)
+  try {
+    const b64 = await new Promise<string>((ok, err) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width  = img.width;
+        canvas.height = img.height;
+        canvas.getContext("2d")!.drawImage(img, 0, 0);
+        ok(canvas.toDataURL("image/jpeg", 0.92));
+      };
+      img.onerror = err;
+      img.src = url + (url.includes("?") ? "&" : "?") + "_t=" + Date.now();
+    });
+    IMG_B64_CACHE.set(url, b64);
+    return b64;
+  } catch { /* fall through */ }
+
+  // Method 3: return URL directly — let jsPDF try loading it
+  return url;
 }
 
 async function getAspect(b64: string): Promise<number> {
@@ -228,25 +250,25 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
   for (let j = 0; j < count; j++) {
     const photo = photos[j];
     const x     = startX + j * (cellW + IMG_GAP);
-    const b64   = IMG_B64_CACHE.get(photo.url);
+    const imgSrc = IMG_B64_CACHE.get(photo.url) ?? photo.url;
 
     // Photo border only (no fill background)
     dc(pdf, [200, 205, 215]); pdf.setLineWidth(0.25);
     pdf.rect(x, y, cellW, IMG_H);
 
-    if (b64) {
+    if (imgSrc) {
       try {
-        const aspect = await getAspect(b64);
+        const aspect = await getAspect(imgSrc);
         let dw = cellW - 2, dh = dw / aspect;
         if (dh > IMG_H - 2) { dh = IMG_H - 2; dw = dh * aspect; }
-        pdf.addImage(b64, imgFormat(b64),
+        pdf.addImage(imgSrc, imgFormat(imgSrc),
           x + (cellW - dw) / 2,
           y + (IMG_H - dh) / 2,
           dw, dh);
-      } catch { /* placeholder already drawn */ }
-    } else {
-      font(pdf, "normal", 8); tc(pdf, LIGHT);
-      pdf.text("ไม่พบรูปภาพ", x + cellW / 2, y + IMG_H / 2, { align: "center" });
+      } catch {
+        font(pdf, "normal", 8); tc(pdf, LIGHT);
+        pdf.text("ไม่พบรูปภาพ", x + cellW / 2, y + IMG_H / 2, { align: "center" });
+      }
     }
 
     // Caption centered under photo
@@ -382,15 +404,13 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
         // Logo
         if (data.jobInfo.logo) {
-          const lb64 = IMG_B64_CACHE.get(data.jobInfo.logo);
-          if (lb64) {
-            try {
-              const asp = await getAspect(lb64);
-              const lh = 20, lw = asp * lh;
-              pdf.addImage(lb64, imgFormat(lb64), (PW - lw) / 2, ry, lw, lh);
-              ry += lh + 8;
-            } catch { ry += 5; }
-          }
+          const lsrc = IMG_B64_CACHE.get(data.jobInfo.logo) ?? data.jobInfo.logo;
+          try {
+            const asp = await getAspect(lsrc);
+            const lh = 20, lw = asp * lh;
+            pdf.addImage(lsrc, imgFormat(lsrc), (PW - lw) / 2, ry, lw, lh);
+            ry += lh + 8;
+          } catch { ry += 5; }
         }
 
         // Title
