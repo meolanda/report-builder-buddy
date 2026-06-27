@@ -273,11 +273,12 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
       }
     }
 
-    // Caption centered under photo
+    // Caption centered under photo (up to 2 lines)
     if (photo.caption) {
       font(pdf, "normal", 7); tc(pdf, MID);
       const lines = pdf.splitTextToSize(photo.caption, cellW);
-      pdf.text(lines[0], x + cellW / 2, y + IMG_H + 4.5, { align: "center" });
+      pdf.text(lines[0], x + cellW / 2, y + IMG_H + 3.5, { align: "center" });
+      if (lines[1]) pdf.text(lines[1], x + cellW / 2, y + IMG_H + 6.5, { align: "center" });
     }
   }
 }
@@ -340,8 +341,9 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         newPage();
       }
       push(ctx, CTX_H);
+      const ctxCont: Block = { t: "ctx", icon: cat.icon, catName: cat.name, unitName, groupLabel: groupLabel ? groupLabel + " (ต่อ)" : "", color };
       for (let i = 0; i < photos.length; i += 2) {
-        if (!fits(ROW_H)) { newPage(); }          // overflow: no ctx → 3 full rows
+        if (!fits(ROW_H)) { newPage(); push(ctxCont, CTX_H); }
         push({ t: "row", photos: photos.slice(i, i + 2) }, ROW_H);
       }
       push({ t: "gap", h: 4 }, 4);
@@ -374,7 +376,8 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   }
 
   const totalPages = pages.length;
-  const catPageMap = new Map<number, number>();   // catIdx → page number
+  const catPageMap  = new Map<number, number>();   // catIdx → first page
+  const unitPageMap = new Map<string, number>();   // `${catIdx}|${unitName}` → first page
 
   // ── PASS 2 : render ──────────────────────────────────────────────────────────
   let coverTocY   = 0;
@@ -455,9 +458,12 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         coverTocY   = ry;
         coverPageNo = pageNo;
 
-        // Reserve TOC lines (category rows + sub-section rows)
-        const subCount = catsWithPhotos.reduce((n, cat) =>
-          n + (cat.type === "fixed-sub" ? cat.subSections.filter(s => s.photos.length > 0).length : 0), 0);
+        // Reserve TOC lines (category rows + sub/unit rows)
+        const subCount = catsWithPhotos.reduce((n, cat) => {
+          if (cat.type === "fixed-sub") return n + cat.subSections.filter(s => s.photos.length > 0).length;
+          if (cat.type === "unit-based") return n + cat.units.filter(u => u.beforePhotos.length > 0 || u.afterPhotos.length > 0).length;
+          return n;
+        }, 0);
         ry += catsWithPhotos.length * 8 + subCount * 6.5 + (data.conclusion ? 8 : 0) + 4;
 
         // Bottom bar
@@ -471,14 +477,15 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         // Track first page of each category for TOC
         const ci2 = catsWithPhotos.findIndex(c => c.name === b.catName);
         if (ci2 >= 0 && !catPageMap.has(ci2)) catPageMap.set(ci2, pageNo);
+        if (ci2 >= 0 && b.unitName && !unitPageMap.has(`${ci2}|${b.unitName}`))
+          unitPageMap.set(`${ci2}|${b.unitName}`, pageNo);
 
-        // Thin left-accent bar (full width, 8mm tall)
-        fc(pdf, LBLUE); pdf.rect(MARGIN, ry, CW, 8, "F");
-        fc(pdf, b.color); pdf.rect(MARGIN, ry, 3, 8, "F");
+        fc(pdf, LBLUE); pdf.rect(MARGIN, ry, CW, CTX_H, "F");
+        fc(pdf, b.color); pdf.rect(MARGIN, ry, 3, CTX_H, "F");
 
         font(pdf, "bold", 8.5); tc(pdf, NAVY);
         const parts = [b.icon + " " + b.catName, b.unitName, b.groupLabel].filter(Boolean);
-        pdf.text(parts.join("  ›  "), MARGIN + 6, ry + 5.5);
+        pdf.text(parts.join("  ›  "), MARGIN + 6, ry + 6.5);
         ry += CTX_H;
       }
 
@@ -518,10 +525,11 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         const cy = PH / 2 - 15;
         dc(pdf, BORDER); pdf.setLineWidth(0.3);
         pdf.line(MARGIN + 25, cy, PW - MARGIN - 25, cy);
-        font(pdf, "bold", 15); tc(pdf, NAVY);
-        pdf.text(data.jobInfo.footerNote, PW / 2, cy + 14, { align: "center" });
-        font(pdf, "normal", 8.5); tc(pdf, MID);
-        pdf.text("หากพบปัญหาการใช้งาน กรุณาติดต่อทีมงาน", PW / 2, cy + 24, { align: "center" });
+        const noteLines = (data.jobInfo.footerNote || "").split(/\n/).map(l => l.trim()).filter(Boolean);
+        font(pdf, "bold", 14); tc(pdf, NAVY);
+        noteLines.forEach((line, i) => {
+          pdf.text(line, PW / 2, cy + 12 + i * 10, { align: "center" });
+        });
         pdf.setDrawColor(200, 200, 200);
         pdf.line(MARGIN + 25, cy + 30, PW - MARGIN - 25, cy + 30);
         font(pdf, "normal", 7.5); tc(pdf, LIGHT);
@@ -553,11 +561,16 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
     const pg  = catPageMap.get(ci) ?? 1;
     drawTocRow(`${cat.icon}  ${cat.name}`, `หน้า ${pg}`, 0, true);
 
-    // Sub-sections for fixed-sub categories
-    if (cat.type === "fixed-sub") {
+    // Sub-entries: units (unit-based) or subsections (fixed-sub)
+    if (cat.type === "unit-based") {
+      for (const unit of cat.units) {
+        if (!unit.beforePhotos.length && !unit.afterPhotos.length) continue;
+        const unitPg = unitPageMap.get(`${ci}|${unit.name}`) ?? pg;
+        drawTocRow(`  •  ${unit.name}`, `หน้า ${unitPg}`, 6, false);
+      }
+    } else if (cat.type === "fixed-sub") {
       for (const sub of cat.subSections) {
         if (!sub.photos.length) continue;
-        // find which page this sub is on from the page plan
         const subPage = (() => {
           for (let pi2 = 0; pi2 < pages.length; pi2++) {
             if (pages[pi2].blocks.some(b => b.t === "ctx" && b.unitName === sub.name))
