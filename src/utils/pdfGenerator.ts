@@ -17,12 +17,14 @@ const CONTENT_BOTTOM = PH - FTR_H - MARGIN;
 // Photo grid — 3 rows × 2 cols = 6 photos per page
 const IMG_GAP   = 5;
 const IMG_W     = (CW - IMG_GAP) / 2;       // ~87.5mm
-const IMG_H     = 58;                        // fixed 58mm → 3 rows fit in 206mm usable
-const ROW_H     = IMG_H + 7;                // photo row + caption space ≈ 65mm
+const IMG_H     = 58;                        // 58mm photo height (original)
+const ROW_H     = IMG_H + 7;                // photo row + caption = 65mm
 
-// Minimum space before starting a section / subsection (header + 1 photo row)
-const SEC_MIN   = 16 + ROW_H;
-const SUB_MIN   = 12 + ROW_H;
+// Context bar replaces hdr+sub+pill — single 10mm strip per group
+const CTX_H     = 10;
+// Minimum space before starting a new group (context bar + 1 row)
+const SEC_MIN   = CTX_H + ROW_H;
+const SUB_MIN   = CTX_H + ROW_H;
 
 // ─── Colours ───────────────────────────────────────────────────────────────────
 const NAVY   : [number,number,number] = [30,  58,  95];
@@ -246,7 +248,6 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
   // If only 1 photo, center it
   const cellW  = count === 1 ? IMG_W * 1.25 : IMG_W;
   const startX = count === 1 ? MARGIN + (CW - cellW) / 2 : MARGIN;
-
   for (let j = 0; j < count; j++) {
     const photo = photos[j];
     const x     = startX + j * (cellW + IMG_GAP);
@@ -264,7 +265,8 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
         pdf.addImage(imgSrc, imgFormat(imgSrc),
           x + (cellW - dw) / 2,
           y + (IMG_H - dh) / 2,
-          dw, dh);
+          dw, dh,
+          photo.id);   // unique alias per photo — prevents jsPDF XObject collision
       } catch {
         font(pdf, "normal", 8); tc(pdf, LIGHT);
         pdf.text("ไม่พบรูปภาพ", x + cellW / 2, y + IMG_H / 2, { align: "center" });
@@ -283,9 +285,7 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
 // ─── Page plan types ───────────────────────────────────────────────────────────
 type Block =
   | { t: "cover" }
-  | { t: "hdr"; catIdx: number }                                  // section banner
-  | { t: "sub"; label: string }                                   // sub-header
-  | { t: "pill"; label: string; color: [number,number,number] }
+  | { t: "ctx"; icon: string; catName: string; unitName: string; groupLabel: string; color: [number,number,number] }
   | { t: "row"; photos: PhotoItem[] }
   | { t: "gap"; h: number }
   | { t: "conclusion"; text: string }
@@ -326,51 +326,40 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   // Categories
   for (let ci = 0; ci < catsWithPhotos.length; ci++) {
     const cat = catsWithPhotos[ci];
-    newPage();                                   // every section → new page
-    push({ t: "hdr", catIdx: ci }, 16);
+
+    const addGroup = (
+      photos: PhotoItem[],
+      unitName: string,
+      groupLabel: string,
+      color: [number,number,number],
+      forceNewPage = false,
+    ) => {
+      if (!photos.length) return;
+      const ctx: Block = { t: "ctx", icon: cat.icon, catName: cat.name, unitName, groupLabel, color };
+      if (forceNewPage || !fits(CTX_H + ROW_H)) {
+        newPage();
+      }
+      push(ctx, CTX_H);
+      for (let i = 0; i < photos.length; i += 2) {
+        if (!fits(ROW_H)) { newPage(); }          // overflow: no ctx → 3 full rows
+        push({ t: "row", photos: photos.slice(i, i + 2) }, ROW_H);
+      }
+      push({ t: "gap", h: 4 }, 4);
+    };
 
     if (cat.type === "unit-based") {
+      let firstUnit = true;
       for (const unit of cat.units) {
         if (!unit.beforePhotos.length && !unit.afterPhotos.length) continue;
-        if (!fits(SUB_MIN)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
-        push({ t: "sub", label: unit.name }, 12);
-
-        const addGroup = (photos: PhotoItem[], pill: string, color: [number,number,number], forceNewPage = false) => {
-          if (!photos.length) return;
-          if (forceNewPage) {
-            // หลัง: ขึ้นหน้าใหม่ มีแค่ pill ไม่ repeat header → เหลือที่ 3 แถว
-            newPage();
-            push({ t: "pill", label: pill, color }, 7);
-          } else {
-            // ก่อน: ถ้าไม่พอก็ขึ้นหน้าใหม่พร้อม header
-            if (!fits(16 + 12 + 7 + ROW_H)) {
-              newPage();
-              push({ t: "hdr", catIdx: ci }, 16);
-              push({ t: "sub", label: unit.name }, 12);
-            }
-            push({ t: "pill", label: pill, color }, 7);
-          }
-          for (let i = 0; i < photos.length; i += 2) {
-            // overflow ภายใน group: ขึ้นหน้าใหม่โดยไม่ใส่ header → 3 แถวเต็ม
-            if (!fits(ROW_H)) { newPage(); }
-            push({ t: "row", photos: photos.slice(i, i + 2) }, ROW_H);
-          }
-          push({ t: "gap", h: 3 }, 3);
-        };
-        addGroup(unit.beforePhotos, "ก่อน", BLUE, false);
-        addGroup(unit.afterPhotos,  "หลัง", GREEN, unit.beforePhotos.length > 0);
-        push({ t: "gap", h: 4 }, 4);
+        if (firstUnit) { newPage(); firstUnit = false; }  // first unit of category → new page
+        addGroup(unit.beforePhotos, unit.name, "ก่อน", BLUE, false);
+        addGroup(unit.afterPhotos,  unit.name, "หลัง", GREEN, unit.beforePhotos.length > 0);
       }
     } else {
+      newPage();
       for (const sub of cat.subSections) {
         if (!sub.photos.length) continue;
-        if (!fits(12 + ROW_H)) { newPage(); push({ t: "hdr", catIdx: ci }, 16); }
-        push({ t: "sub", label: sub.name }, 12);
-        for (let i = 0; i < sub.photos.length; i += 2) {
-          if (!fits(ROW_H)) { newPage(); } // overflow: no header → 3 rows fit
-          push({ t: "row", photos: sub.photos.slice(i, i + 2) }, ROW_H);
-        }
-        push({ t: "gap", h: 4 }, 4);
+        addGroup(sub.photos, sub.name, "", BLUE, false);
       }
     }
   }
@@ -477,24 +466,20 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         pdf.text(`หน้า 1 / ${totalPages}`, PW / 2, PH - 2.5, { align: "center" });
       }
 
-      // ── Section banner ───────────────────────────────────────────────────────
-      else if (b.t === "hdr") {
-        const cat = catsWithPhotos[b.catIdx];
-        if (!catPageMap.has(b.catIdx)) catPageMap.set(b.catIdx, pageNo);
-        const bh = drawSectionBanner(pdf, cat.icon, cat.name, ry);
-        ry += bh + 6;
-      }
+      // ── Context bar (icon · cat › unit · ก่อน/หลัง) ────────────────────────────
+      else if (b.t === "ctx") {
+        // Track first page of each category for TOC
+        const ci2 = catsWithPhotos.findIndex(c => c.name === b.catName);
+        if (ci2 >= 0 && !catPageMap.has(ci2)) catPageMap.set(ci2, pageNo);
 
-      // ── Sub-header ───────────────────────────────────────────────────────────
-      else if (b.t === "sub") {
-        const bh = drawSubHeader(pdf, b.label, ry);
-        ry += bh + 4;
-      }
+        // Thin left-accent bar (full width, 8mm tall)
+        fc(pdf, LBLUE); pdf.rect(MARGIN, ry, CW, 8, "F");
+        fc(pdf, b.color); pdf.rect(MARGIN, ry, 3, 8, "F");
 
-      // ── Pill ─────────────────────────────────────────────────────────────────
-      else if (b.t === "pill") {
-        drawPill(pdf, b.label, MARGIN + 2, ry + 4, b.color);
-        ry += 8;
+        font(pdf, "bold", 8.5); tc(pdf, NAVY);
+        const parts = [b.icon + " " + b.catName, b.unitName, b.groupLabel].filter(Boolean);
+        pdf.text(parts.join("  ›  "), MARGIN + 6, ry + 5.5);
+        ry += CTX_H;
       }
 
       // ── Photo row ────────────────────────────────────────────────────────────
@@ -513,8 +498,11 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         await drawHeader(pdf, data);
         drawFooter(pdf, pageNo, totalPages);
         ry = CONTENT_TOP;
-        const bh = drawSectionBanner(pdf, "📝", "สรุปผลการทำงาน", ry);
-        ry += bh + 10;
+        fc(pdf, LBLUE); pdf.rect(MARGIN, ry, CW, 8, "F");
+        fc(pdf, BLUE);  pdf.rect(MARGIN, ry, 3, 8, "F");
+        font(pdf, "bold", 9); tc(pdf, NAVY);
+        pdf.text("📝  สรุปผลการทำงาน", MARGIN + 6, ry + 5.5);
+        ry += 12;
         font(pdf, "normal", 11); tc(pdf, DARK);
         for (const line of pdf.splitTextToSize(b.text, CW - 4)) {
           if (ry + 7 > CONTENT_BOTTOM) break;
@@ -572,7 +560,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         // find which page this sub is on from the page plan
         const subPage = (() => {
           for (let pi2 = 0; pi2 < pages.length; pi2++) {
-            if (pages[pi2].blocks.some(b => b.t === "sub" && b.label === sub.name))
+            if (pages[pi2].blocks.some(b => b.t === "ctx" && b.unitName === sub.name))
               return pi2 + 1;
           }
           return pg;
