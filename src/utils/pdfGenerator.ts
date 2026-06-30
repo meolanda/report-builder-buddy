@@ -7,18 +7,20 @@ const PH        = 297;
 const MARGIN    = 15;
 const CW        = PW - MARGIN * 2;          // 180mm usable width
 
-const HDR_H     = 49;                        // header image (25) + info bar (24)
-const IMG_HDR_H = 25;                        // header image portion
-const INFO_BAR_H = 24;                       // navy info bar below image
-const FTR_H     = 12;
+const HDR_H     = 38;                        // header image (20) + info bar (18) — compact, frees space for bigger photos
+const IMG_HDR_H = 20;                        // header image portion
+const INFO_BAR_H = 18;                       // navy info bar below image
+const FTR_H     = 9;
 const CONTENT_TOP    = HDR_H + MARGIN;       // y where content starts (non-cover)
 const CONTENT_BOTTOM = PH - FTR_H - MARGIN;
 
 // Photo grid — 3 rows × 2 cols = 6 photos per page
-const IMG_GAP   = 5;
-const IMG_W     = (CW - IMG_GAP) / 2;       // ~87.5mm
-const IMG_H     = 58;                        // 58mm photo height (original)
-const ROW_H     = IMG_H + 7;                // photo row + caption = 65mm
+const IMG_GAP    = 5;
+const IMG_W      = (CW - IMG_GAP) / 2;       // ~87.5mm
+const ROW_H      = 70;                       // fixed row height (image + optional caption)
+const CAP_H      = 7;                        // reserved for caption text, only when a row actually has one
+const IMG_H_CAP  = ROW_H - CAP_H;            // 63mm — used when the row has a caption
+const IMG_H_FULL = ROW_H;                    // 70mm — used when the row has no caption (photo fills the row)
 
 // Context bar replaces hdr+sub+pill — single 10mm strip per group
 const CTX_H     = 10;
@@ -183,14 +185,14 @@ async function drawHeader(pdf: jsPDF, data: ReportData) {
   pdf.rect(0, IMG_HDR_H, PW, INFO_BAR_H, "F");
 
   tc(pdf, WHITE);
-  let iy = IMG_HDR_H + 8;
-  font(pdf, "normal", 8.5);
+  let iy = IMG_HDR_H + 7;
+  font(pdf, "normal", 8);
 
   if (data.jobInfo.clientName)
     pdf.text(`ลูกค้า: ${data.jobInfo.clientName}`, MARGIN, iy);
   if (data.jobInfo.dateTime)
     pdf.text(`วันที่: ${data.jobInfo.dateTime}`, PW - MARGIN, iy, { align: "right" });
-  iy += 6;
+  iy += 5.5;
   if (data.jobInfo.location)
     pdf.text(`สถานที่: ${data.jobInfo.location}`, MARGIN, iy);
   if (data.jobInfo.reporterName)
@@ -245,6 +247,9 @@ function drawPill(pdf: jsPDF, label: string, x: number, y: number, color: [numbe
 // Draw a single photo row (1 or 2 photos)
 async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
   const count = Math.min(photos.length, 2);
+  // If no caption anywhere in this row, the photo fills the whole row height
+  const hasCaption = photos.some(p => p.caption?.trim());
+  const imgH = hasCaption ? IMG_H_CAP : IMG_H_FULL;
   // If only 1 photo, center it
   const cellW  = count === 1 ? IMG_W * 1.25 : IMG_W;
   const startX = count === 1 ? MARGIN + (CW - cellW) / 2 : MARGIN;
@@ -255,21 +260,21 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
 
     // Photo border only (no fill background)
     dc(pdf, [200, 205, 215]); pdf.setLineWidth(0.25);
-    pdf.rect(x, y, cellW, IMG_H);
+    pdf.rect(x, y, cellW, imgH);
 
     if (imgSrc) {
       try {
         const aspect = await getAspect(imgSrc);
         let dw = cellW - 2, dh = dw / aspect;
-        if (dh > IMG_H - 2) { dh = IMG_H - 2; dw = dh * aspect; }
+        if (dh > imgH - 2) { dh = imgH - 2; dw = dh * aspect; }
         pdf.addImage(imgSrc, imgFormat(imgSrc),
           x + (cellW - dw) / 2,
-          y + (IMG_H - dh) / 2,
+          y + (imgH - dh) / 2,
           dw, dh,
           photo.id);   // unique alias per photo — prevents jsPDF XObject collision
       } catch {
         font(pdf, "normal", 8); tc(pdf, LIGHT);
-        pdf.text("ไม่พบรูปภาพ", x + cellW / 2, y + IMG_H / 2, { align: "center" });
+        pdf.text("ไม่พบรูปภาพ", x + cellW / 2, y + imgH / 2, { align: "center" });
       }
     }
 
@@ -277,8 +282,8 @@ async function drawPhotoRow(pdf: jsPDF, photos: PhotoItem[], y: number) {
     if (photo.caption) {
       font(pdf, "normal", 7); tc(pdf, MID);
       const lines = pdf.splitTextToSize(photo.caption, cellW);
-      pdf.text(lines[0], x + cellW / 2, y + IMG_H + 3.5, { align: "center" });
-      if (lines[1]) pdf.text(lines[1], x + cellW / 2, y + IMG_H + 6.5, { align: "center" });
+      pdf.text(lines[0], x + cellW / 2, y + imgH + 3.5, { align: "center" });
+      if (lines[1]) pdf.text(lines[1], x + cellW / 2, y + imgH + 6.5, { align: "center" });
     }
   }
 }
@@ -376,13 +381,8 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   }
 
   const totalPages = pages.length;
-  const catPageMap  = new Map<number, number>();   // catIdx → first page
-  const unitPageMap = new Map<string, number>();   // `${catIdx}|${unitName}` → first page
 
   // ── PASS 2 : render ──────────────────────────────────────────────────────────
-  let coverTocY   = 0;
-  let coverPageNo = 1;
-
   for (let pi = 0; pi < pages.length; pi++) {
     if (pi > 0) pdf.addPage();
     const page   = pages[pi];
@@ -445,27 +445,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
           pdf.text(value, MARGIN + 46, ry + 3);
           ry += 9;
         }
-        ry += 14;
-
-        // TOC header
-        font(pdf, "bold", 12); tc(pdf, NAVY);
-        pdf.text("สารบัญ", MARGIN, ry);
-        ry += 5;
-        dc(pdf, BLUE); pdf.setLineWidth(0.4);
-        pdf.line(MARGIN, ry, MARGIN + 24, ry);
-        ry += 8;
-
-        coverTocY   = ry;
-        coverPageNo = pageNo;
-
-        // Reserve TOC lines (category rows + sub/unit rows)
-        const subCount = catsWithPhotos.reduce((n, cat) => {
-          if (cat.type === "fixed-sub") return n + cat.subSections.filter(s => s.photos.length > 0).length;
-          if (cat.type === "unit-based") return n + cat.units.filter(u => u.beforePhotos.length > 0 || u.afterPhotos.length > 0).length;
-          return n;
-        }, 0);
-        ry += catsWithPhotos.length * 8 + subCount * 6.5 + (data.conclusion ? 8 : 0) + 4;
-
         // Bottom bar
         fc(pdf, NAVY); pdf.rect(0, PH - 7, PW, 7, "F");
         font(pdf, "normal", 8); tc(pdf, WHITE);
@@ -474,12 +453,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Context bar (icon · cat › unit · ก่อน/หลัง) ────────────────────────────
       else if (b.t === "ctx") {
-        // Track first page of each category for TOC
-        const ci2 = catsWithPhotos.findIndex(c => c.name === b.catName);
-        if (ci2 >= 0 && !catPageMap.has(ci2)) catPageMap.set(ci2, pageNo);
-        if (ci2 >= 0 && b.unitName && !unitPageMap.has(`${ci2}|${b.unitName}`))
-          unitPageMap.set(`${ci2}|${b.unitName}`, pageNo);
-
         fc(pdf, LBLUE); pdf.rect(MARGIN, ry, CW, CTX_H, "F");
         fc(pdf, b.color); pdf.rect(MARGIN, ry, 3, CTX_H, "F");
 
@@ -536,56 +509,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         pdf.text(`หน้า ${pageNo} / ${totalPages}`, PW / 2, PH - 3, { align: "center" });
       }
     }
-  }
-
-  // ── Fill TOC on cover page ───────────────────────────────────────────────────
-  pdf.setPage(coverPageNo);
-  let ty = coverTocY;
-
-  const drawTocRow = (label: string, pgLabel: string, indent: number, bold: boolean) => {
-    font(pdf, bold ? "bold" : "normal", bold ? 10.5 : 9.5);
-    tc(pdf, bold ? DARK : MID);
-    pdf.text(label, MARGIN + 4 + indent, ty);
-    const lx = MARGIN + 4 + indent + pdf.getTextWidth(label) + 3;
-    const rx = PW - MARGIN - pdf.getTextWidth(pgLabel) - 3;
-    tc(pdf, BORDER);
-    for (let dx = lx; dx < rx; dx += 2.2) pdf.text(".", dx, ty);
-    font(pdf, "bold", bold ? 10.5 : 9.5);
-    tc(pdf, BLUE);
-    pdf.text(pgLabel, PW - MARGIN, ty, { align: "right" });
-    ty += bold ? 8 : 6.5;
-  };
-
-  for (let ci = 0; ci < catsWithPhotos.length; ci++) {
-    const cat = catsWithPhotos[ci];
-    const pg  = catPageMap.get(ci) ?? 1;
-    drawTocRow(`${cat.icon}  ${cat.name}`, `หน้า ${pg}`, 0, true);
-
-    // Sub-entries: units (unit-based) or subsections (fixed-sub)
-    if (cat.type === "unit-based") {
-      for (const unit of cat.units) {
-        if (!unit.beforePhotos.length && !unit.afterPhotos.length) continue;
-        const unitPg = unitPageMap.get(`${ci}|${unit.name}`) ?? pg;
-        drawTocRow(`  •  ${unit.name}`, `หน้า ${unitPg}`, 6, false);
-      }
-    } else if (cat.type === "fixed-sub") {
-      for (const sub of cat.subSections) {
-        if (!sub.photos.length) continue;
-        const subPage = (() => {
-          for (let pi2 = 0; pi2 < pages.length; pi2++) {
-            if (pages[pi2].blocks.some(b => b.t === "ctx" && b.unitName === sub.name))
-              return pi2 + 1;
-          }
-          return pg;
-        })();
-        drawTocRow(`  •  ${sub.name}`, `หน้า ${subPage}`, 6, false);
-      }
-    }
-  }
-
-  if (data.conclusion?.trim()) {
-    const cPage = pages.findIndex(p => p.blocks.some(b => b.t === "conclusion")) + 1;
-    drawTocRow("📝  สรุปผล", `หน้า ${cPage}`, 0, true);
   }
 
   // ── Watermark ────────────────────────────────────────────────────────────────
