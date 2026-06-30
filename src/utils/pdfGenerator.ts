@@ -307,10 +307,20 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   await registerFonts(pdf);
   await preloadAll(data);
 
+  // Entry/exit photos ("รูปเข้า-ออกพื้นที่") are shown on the cover page instead of in the body
+  const ENTRY_EXIT_SUB_ID = "doc-1";
+  let entryExitPhotos: PhotoItem[] = [];
+  for (const cat of data.categories) {
+    if (cat.type === "fixed-sub") {
+      const sub = cat.subSections.find(s => s.id === ENTRY_EXIT_SUB_ID);
+      if (sub?.photos.length) entryExitPhotos = sub.photos;
+    }
+  }
+
   const catsWithPhotos = data.categories.filter(cat => {
     if (cat.type === "unit-based")
       return cat.units.some(u => u.beforePhotos.length > 0 || u.afterPhotos.length > 0);
-    return cat.subSections.some(s => s.photos.length > 0);
+    return cat.subSections.some(s => s.id !== ENTRY_EXIT_SUB_ID && s.photos.length > 0);
   });
 
   // ── PASS 1 : build page plan ─────────────────────────────────────────────────
@@ -365,6 +375,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
     } else {
       newPage();
       for (const sub of cat.subSections) {
+        if (sub.id === ENTRY_EXIT_SUB_ID) continue;
         if (!sub.photos.length) continue;
         addGroup(sub.photos, sub.name, "", BLUE, false);
       }
@@ -445,6 +456,44 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
           pdf.text(value, MARGIN + 46, ry + 3);
           ry += 9;
         }
+
+        // Entry/exit photos — fills the rest of the cover page
+        if (entryExitPhotos.length) {
+          ry += 12;
+          font(pdf, "bold", 12); tc(pdf, NAVY);
+          pdf.text("📷  รูปเข้า-ออกงาน", MARGIN, ry);
+          ry += 5;
+          dc(pdf, BLUE); pdf.setLineWidth(0.4);
+          pdf.line(MARGIN, ry, MARGIN + 24, ry);
+          ry += 8;
+
+          const shots  = entryExitPhotos.slice(0, 4);
+          const cellH  = 50;
+          for (let i = 0; i < shots.length; i += 2) {
+            const rowPhotos = shots.slice(i, i + 2);
+            const cnt   = rowPhotos.length;
+            const cellW = cnt === 1 ? IMG_W * 1.25 : IMG_W;
+            const startX = cnt === 1 ? MARGIN + (CW - cellW) / 2 : MARGIN;
+            for (let j = 0; j < cnt; j++) {
+              const photo = rowPhotos[j];
+              const x = startX + j * (cellW + IMG_GAP);
+              const imgSrc = IMG_B64_CACHE.get(photo.url) ?? photo.url;
+              dc(pdf, [200, 205, 215]); pdf.setLineWidth(0.25);
+              pdf.rect(x, ry, cellW, cellH);
+              if (imgSrc) {
+                try {
+                  const aspect = await getAspect(imgSrc);
+                  let dw = cellW - 2, dh = dw / aspect;
+                  if (dh > cellH - 2) { dh = cellH - 2; dw = dh * aspect; }
+                  pdf.addImage(imgSrc, imgFormat(imgSrc),
+                    x + (cellW - dw) / 2, ry + (cellH - dh) / 2, dw, dh, photo.id);
+                } catch { /* skip */ }
+              }
+            }
+            ry += cellH + 5;
+          }
+        }
+
         // Bottom bar
         fc(pdf, NAVY); pdf.rect(0, PH - 7, PW, 7, "F");
         font(pdf, "normal", 8); tc(pdf, WHITE);
