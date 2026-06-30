@@ -120,6 +120,17 @@ const Index = () => {
     setCategories(categories.filter((c) => c.id !== catId));
   };
 
+  const moveCategory = (catId: string, direction: "up" | "down") => {
+    setCategories((prev) => {
+      const idx = prev.findIndex((c) => c.id === catId);
+      const swapWith = direction === "up" ? idx - 1 : idx + 1;
+      if (idx === -1 || swapWith < 0 || swapWith >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+      return next;
+    });
+  };
+
   const DEFAULT_IDS = new Set(DEFAULT_CATEGORIES.map((c) => c.id));
 
   const getTotalPhotos = () =>
@@ -206,13 +217,17 @@ const Index = () => {
               <h2 className="text-lg font-semibold text-foreground">
                 รูปภาพในรายงาน <span className="text-sm font-normal text-muted-foreground">({getTotalPhotos()} รูป)</span>
               </h2>
-              {categories.map((cat) => (
+              {categories.map((cat, idx) => (
                 <CategorySection
                   key={cat.id}
                   category={cat}
                   onUpdate={updateCategory}
                   isCustom={!DEFAULT_IDS.has(cat.id)}
                   onDelete={() => deleteCategory(cat.id)}
+                  onMoveUp={() => moveCategory(cat.id, "up")}
+                  onMoveDown={() => moveCategory(cat.id, "down")}
+                  canMoveUp={idx > 0}
+                  canMoveDown={idx < categories.length - 1}
                 />
               ))}
               <Button variant="outline" className="w-full" onClick={() => setShowAddCategory(true)}>

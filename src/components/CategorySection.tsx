@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { Category, CategoryUnit } from "@/types/report";
 import PhotoGrid from "@/components/PhotoGrid";
 
@@ -196,9 +196,16 @@ interface CategorySectionProps {
   onUpdate: (cat: Category) => void;
   onDelete?: () => void;
   isCustom?: boolean;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
 }
 
-const CategorySection = ({ category, onUpdate, onDelete, isCustom }: CategorySectionProps) => {
+const CategorySection = ({
+  category, onUpdate, onDelete, isCustom,
+  onMoveUp, onMoveDown, canMoveUp, canMoveDown,
+}: CategorySectionProps) => {
   const [isOpen, setIsOpen] = useState(true);
 
   const totalPhotos = category.type === "unit-based"
@@ -218,11 +225,29 @@ const CategorySection = ({ category, onUpdate, onDelete, isCustom }: CategorySec
                 {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
               </button>
             </CollapsibleTrigger>
-            {isCustom && onDelete && (
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost" size="icon" className="h-7 w-7"
+                disabled={!canMoveUp}
+                onClick={(e) => { e.stopPropagation(); onMoveUp?.(); }}
+                title="เลื่อนขึ้น"
+              >
+                <ArrowUp className="h-4 w-4" />
               </Button>
-            )}
+              <Button
+                variant="ghost" size="icon" className="h-7 w-7"
+                disabled={!canMoveDown}
+                onClick={(e) => { e.stopPropagation(); onMoveDown?.(); }}
+                title="เลื่อนลง"
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+              {isCustom && onDelete && (
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onDelete}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CollapsibleContent>
