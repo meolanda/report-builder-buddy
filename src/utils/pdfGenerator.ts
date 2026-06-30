@@ -529,8 +529,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Conclusion ───────────────────────────────────────────────────────────
       else if (b.t === "conclusion") {
-        await drawHeader(pdf, data);
-        drawFooter(pdf, pageNo, totalPages);
         ry = CONTENT_TOP;
         fc(pdf, LBLUE); pdf.rect(MARGIN, ry, CW, 8, "F");
         fc(pdf, BLUE);  pdf.rect(MARGIN, ry, 3, 8, "F");
@@ -547,8 +545,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Closing ──────────────────────────────────────────────────────────────
       else if (b.t === "closing") {
-        fc(pdf, NAVY); pdf.rect(0, 0, PW, 7, "F");
-        fc(pdf, NAVY); pdf.rect(0, PH - 7, PW, 7, "F");
         const cy = PH / 2 - 15;
         dc(pdf, BORDER); pdf.setLineWidth(0.3);
         pdf.line(MARGIN + 25, cy, PW - MARGIN - 25, cy);
@@ -559,8 +555,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         });
         pdf.setDrawColor(200, 200, 200);
         pdf.line(MARGIN + 25, cy + 30, PW - MARGIN - 25, cy + 30);
-        font(pdf, "normal", 7.5); tc(pdf, LIGHT);
-        pdf.text(`หน้า ${pageNo} / ${totalPages}`, PW / 2, PH - 3, { align: "center" });
       }
     }
   }
