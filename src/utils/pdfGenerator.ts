@@ -180,7 +180,10 @@ async function drawHeader(pdf: jsPDF, data: ReportData) {
     pdf.text(data.jobInfo.subject, PW - MARGIN, IMG_HDR_H / 2 + 2, { align: "right" });
   }
 
-  // ── Navy info bar ───────────────────────────────────────────────────────────
+  // ── Navy info bar — only drawn when there is actual info to show ───────────
+  const hasInfo = !!(data.jobInfo.clientName || data.jobInfo.dateTime || data.jobInfo.location || data.jobInfo.reporterName);
+  if (!hasInfo) return;
+
   fc(pdf, NAVY);
   pdf.rect(0, IMG_HDR_H, PW, INFO_BAR_H, "F");
 
@@ -444,17 +447,19 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
           ["ผู้รายงาน", data.jobInfo.reporterName],
         ].filter(([, v]) => v) as [string,string][];
 
-        const cardH = rows.length * 9 + 12;
-        fc(pdf, [242, 247, 255]); dc(pdf, BORDER); pdf.setLineWidth(0.2);
-        pdf.roundedRect(MARGIN + 6, ry - 4, CW - 12, cardH, 3, 3, "FD");
-        fc(pdf, NAVY); pdf.rect(MARGIN + 6, ry - 4, 4, cardH, "F");
+        if (rows.length) {
+          const cardH = rows.length * 9 + 12;
+          fc(pdf, [242, 247, 255]); dc(pdf, BORDER); pdf.setLineWidth(0.2);
+          pdf.roundedRect(MARGIN + 6, ry - 4, CW - 12, cardH, 3, 3, "FD");
+          fc(pdf, NAVY); pdf.rect(MARGIN + 6, ry - 4, 4, cardH, "F");
 
-        for (const [label, value] of rows) {
-          font(pdf, "bold", 10.5); tc(pdf, NAVY);
-          pdf.text(`${label}:`, MARGIN + 15, ry + 3);
-          font(pdf, "normal", 10.5); tc(pdf, DARK);
-          pdf.text(value, MARGIN + 46, ry + 3);
-          ry += 9;
+          for (const [label, value] of rows) {
+            font(pdf, "bold", 10.5); tc(pdf, NAVY);
+            pdf.text(`${label}:`, MARGIN + 15, ry + 3);
+            font(pdf, "normal", 10.5); tc(pdf, DARK);
+            pdf.text(value, MARGIN + 46, ry + 3);
+            ry += 9;
+          }
         }
 
         // Entry/exit photos — fills the rest of the cover page
