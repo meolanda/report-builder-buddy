@@ -322,9 +322,12 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
   const push = (b: Block, h: number) => { cur().blocks.push(b); py += h; };
   const fits = (h: number) => py + h <= CONTENT_BOTTOM;
 
-  // Cover
+  // Cover (always its own page)
   newPage(true);
   push({ t: "cover" }, 0);
+
+  // Content starts on page 2 (cover must never share a page with content)
+  if (catsWithPhotos.length > 0) newPage();
 
   // Categories
   for (const cat of catsWithPhotos) {
