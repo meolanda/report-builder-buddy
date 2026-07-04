@@ -13,6 +13,8 @@ interface Props {
 
 const UnitBasedSection = ({ category, onUpdate }: Props) => {
   const [openUnits, setOpenUnits] = useState<Set<string>>(new Set(category.units.map((u) => u.id)));
+  const [editingUnitId, setEditingUnitId] = useState<string | null>(null);
+  const [editUnitName, setEditUnitName] = useState("");
 
   const toggleUnit = (id: string) => {
     setOpenUnits((prev) => {
@@ -24,15 +26,13 @@ const UnitBasedSection = ({ category, onUpdate }: Props) => {
 
   const addUnit = () => {
     const num = category.units.length + 1;
-    const baseName = category.name; // e.g. "แอร์"
     const newUnit: CategoryUnit = {
       id: `${category.id}-unit-${Date.now()}`,
-      name: `${baseName} ยูนิตที่ ${num}`,
+      name: `${category.name} ยูนิตที่ ${num}`,
       beforePhotos: [],
       afterPhotos: [],
     };
-    const updated = { ...category, units: [...category.units, newUnit] };
-    onUpdate(updated);
+    onUpdate({ ...category, units: [...category.units, newUnit] });
     setOpenUnits((prev) => new Set(prev).add(newUnit.id));
   };
 
@@ -42,10 +42,14 @@ const UnitBasedSection = ({ category, onUpdate }: Props) => {
   };
 
   const updateUnit = (unitId: string, partial: Partial<CategoryUnit>) => {
-    onUpdate({
-      ...category,
-      units: category.units.map((u) => (u.id === unitId ? { ...u, ...partial } : u)),
-    });
+    onUpdate({ ...category, units: category.units.map((u) => (u.id === unitId ? { ...u, ...partial } : u)) });
+  };
+
+  const saveEditUnit = (unitId: string) => {
+    if (editUnitName.trim()) {
+      onUpdate({ ...category, units: category.units.map((u) => u.id === unitId ? { ...u, name: editUnitName.trim() } : u) });
+    }
+    setEditingUnitId(null);
   };
 
   return (
@@ -58,7 +62,23 @@ const UnitBasedSection = ({ category, onUpdate }: Props) => {
                 {openUnits.has(unit.id) ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </Button>
             </CollapsibleTrigger>
-            <span className="flex-1 text-sm font-medium">{unit.name}</span>
+            {editingUnitId === unit.id ? (
+              <input
+                className="flex-1 rounded border border-input bg-background px-2 py-0.5 text-sm"
+                value={editUnitName}
+                onChange={(e) => setEditUnitName(e.target.value)}
+                onBlur={() => saveEditUnit(unit.id)}
+                onKeyDown={(e) => e.key === "Enter" && saveEditUnit(unit.id)}
+                autoFocus
+              />
+            ) : (
+              <span
+                className="flex-1 cursor-pointer text-sm font-medium hover:text-primary"
+                onDoubleClick={() => { setEditingUnitId(unit.id); setEditUnitName(unit.name); }}
+              >
+                {unit.name}
+              </span>
+            )}
             <span className="text-xs text-muted-foreground">
               {unit.beforePhotos.length + unit.afterPhotos.length} รูป
             </span>
@@ -120,11 +140,6 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
     onUpdate({ ...category, subSections: category.subSections.filter((s) => s.id !== subId) });
   };
 
-  const startEdit = (sub: { id: string; name: string }) => {
-    setEditingId(sub.id);
-    setEditName(sub.name);
-  };
-
   const saveEdit = (subId: string) => {
     if (editName.trim()) {
       onUpdate({
@@ -157,7 +172,7 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
             ) : (
               <span
                 className="flex-1 cursor-pointer text-sm font-medium hover:text-primary"
-                onDoubleClick={() => startEdit(sub)}
+                onDoubleClick={() => { setEditingId(sub.id); setEditName(sub.name); }}
               >
                 {sub.name}
               </span>
@@ -207,6 +222,14 @@ const CategorySection = ({
   onMoveUp, onMoveDown, canMoveUp, canMoveDown,
 }: CategorySectionProps) => {
   const [isOpen, setIsOpen] = useState(true);
+  const [editingCatName, setEditingCatName] = useState(false);
+  const [catNameVal, setCatNameVal] = useState(category.name);
+
+  const saveCatName = () => {
+    if (catNameVal.trim()) onUpdate({ ...category, name: catNameVal.trim() });
+    else setCatNameVal(category.name);
+    setEditingCatName(false);
+  };
 
   const totalPhotos = category.type === "unit-based"
     ? category.units.reduce((sum, u) => sum + u.beforePhotos.length + u.afterPhotos.length, 0)
@@ -217,15 +240,33 @@ const CategorySection = ({
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CollapsibleTrigger asChild>
-              <button className="flex items-center gap-2 text-left">
-                <span className="text-lg">{category.icon}</span>
-                <CardTitle className="text-base">{category.name}</CardTitle>
-                <span className="text-xs text-muted-foreground">({totalPhotos} รูป)</span>
-                {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-              </button>
-            </CollapsibleTrigger>
-            <div className="flex items-center gap-1">
+            <div className="flex flex-1 items-center gap-2 min-w-0">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                  {isOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                </Button>
+              </CollapsibleTrigger>
+              <span className="text-lg shrink-0">{category.icon}</span>
+              {editingCatName ? (
+                <input
+                  className="rounded border border-input bg-background px-2 py-0.5 text-sm font-semibold flex-1 min-w-0"
+                  value={catNameVal}
+                  onChange={(e) => setCatNameVal(e.target.value)}
+                  onBlur={saveCatName}
+                  onKeyDown={(e) => e.key === "Enter" && saveCatName()}
+                  autoFocus
+                />
+              ) : (
+                <CardTitle
+                  className="text-base cursor-pointer hover:text-primary"
+                  onDoubleClick={() => { setEditingCatName(true); setCatNameVal(category.name); }}
+                >
+                  {category.name}
+                </CardTitle>
+              )}
+              <span className="text-xs text-muted-foreground shrink-0">({totalPhotos} รูป)</span>
+            </div>
+            <div className="flex items-center gap-1 ml-2">
               <Button
                 variant="ghost" size="icon" className="h-7 w-7"
                 disabled={!canMoveUp}
