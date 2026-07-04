@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown, Pencil } from "lucide-react";
 import { Category, CategoryUnit } from "@/types/report";
 import PhotoGrid from "@/components/PhotoGrid";
 
@@ -126,11 +126,7 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
 
   const addSubSection = () => {
     const num = category.subSections.length + 1;
-    const newSub = {
-      id: `${category.id}-sub-${Date.now()}`,
-      name: `หัวข้อย่อย ${num}`,
-      photos: [],
-    };
+    const newSub = { id: `${category.id}-sub-${Date.now()}`, name: `หัวข้อย่อย ${num}`, photos: [] };
     onUpdate({ ...category, subSections: [...category.subSections, newSub] });
     setOpenSubs((prev) => new Set(prev).add(newSub.id));
   };
@@ -138,6 +134,20 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
   const deleteSubSection = (subId: string) => {
     if (category.subSections.length <= 1) return;
     onUpdate({ ...category, subSections: category.subSections.filter((s) => s.id !== subId) });
+  };
+
+  const moveSub = (subId: string, dir: "up" | "down") => {
+    const subs = [...category.subSections];
+    const idx = subs.findIndex((s) => s.id === subId);
+    const swap = dir === "up" ? idx - 1 : idx + 1;
+    if (idx === -1 || swap < 0 || swap >= subs.length) return;
+    [subs[idx], subs[swap]] = [subs[swap], subs[idx]];
+    onUpdate({ ...category, subSections: subs });
+  };
+
+  const startEdit = (sub: { id: string; name: string }) => {
+    setEditingId(sub.id);
+    setEditName(sub.name);
   };
 
   const saveEdit = (subId: string) => {
@@ -152,7 +162,7 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
 
   return (
     <div className="space-y-2">
-      {category.subSections.map((sub) => (
+      {category.subSections.map((sub, idx) => (
         <Collapsible key={sub.id} open={openSubs.has(sub.id)} onOpenChange={() => toggleSub(sub.id)}>
           <div className="flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2">
             <CollapsibleTrigger asChild>
@@ -166,18 +176,38 @@ const FixedSubSection = ({ category, onUpdate }: Props) => {
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 onBlur={() => saveEdit(sub.id)}
-                onKeyDown={(e) => e.key === "Enter" && saveEdit(sub.id)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveEdit(sub.id); if (e.key === "Escape") setEditingId(null); }}
                 autoFocus
               />
             ) : (
-              <span
-                className="flex-1 cursor-pointer text-sm font-medium hover:text-primary"
-                onDoubleClick={() => { setEditingId(sub.id); setEditName(sub.name); }}
-              >
-                {sub.name}
-              </span>
+              <span className="flex-1 text-sm font-medium">{sub.name}</span>
             )}
             <span className="text-xs text-muted-foreground">{sub.photos.length} รูป</span>
+            {/* Edit name */}
+            <Button
+              variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-primary"
+              onClick={() => startEdit(sub)}
+              title="แก้ชื่อ"
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+            {/* Move up/down */}
+            <Button
+              variant="ghost" size="icon" className="h-6 w-6"
+              disabled={idx === 0}
+              onClick={() => moveSub(sub.id, "up")}
+              title="เลื่อนขึ้น"
+            >
+              <ArrowUp className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost" size="icon" className="h-6 w-6"
+              disabled={idx === category.subSections.length - 1}
+              onClick={() => moveSub(sub.id, "down")}
+              title="เลื่อนลง"
+            >
+              <ArrowDown className="h-3 w-3" />
+            </Button>
             {category.subSections.length > 1 && (
               <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => deleteSubSection(sub.id)}>
                 <Trash2 className="h-3.5 w-3.5" />
