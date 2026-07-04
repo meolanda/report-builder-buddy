@@ -387,12 +387,15 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
     }
   }
 
+  const CONCLUSION_MIN = 40;
+  const CLOSING_MIN    = 50;
+
   if (data.conclusion?.trim()) {
-    newPage();
+    if (!fits(CONCLUSION_MIN)) newPage();
     push({ t: "conclusion", text: data.conclusion }, 0);
   }
   if (data.jobInfo.footerNote?.trim()) {
-    newPage();
+    if (!fits(CLOSING_MIN)) newPage();
     push({ t: "closing" }, 0);
   }
 
@@ -560,16 +563,18 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Closing ──────────────────────────────────────────────────────────────
       else if (b.t === "closing") {
-        const cy = PH / 2 - 15;
+        ry += 8;
         dc(pdf, BORDER); pdf.setLineWidth(0.3);
-        pdf.line(MARGIN + 25, cy, PW - MARGIN - 25, cy);
+        pdf.line(MARGIN + 25, ry, PW - MARGIN - 25, ry);
+        ry += 12;
         const noteLines = (data.jobInfo.footerNote || "").split(/\n/).map(l => l.trim()).filter(Boolean);
         font(pdf, "bold", 14); tc(pdf, NAVY);
         noteLines.forEach((line, i) => {
-          pdf.text(line, PW / 2, cy + 12 + i * 10, { align: "center" });
+          pdf.text(line, PW / 2, ry + i * 10, { align: "center" });
         });
+        const afterText = ry + noteLines.length * 10 + 8;
         pdf.setDrawColor(200, 200, 200);
-        pdf.line(MARGIN + 25, cy + 30, PW - MARGIN - 25, cy + 30);
+        pdf.line(MARGIN + 25, afterText, PW - MARGIN - 25, afterText);
       }
     }
   }
