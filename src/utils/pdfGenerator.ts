@@ -11,7 +11,7 @@ const HDR_H      = 38;                   // logo strip (20) + info bar (18)
 const IMG_HDR_H  = 20;
 const INFO_BAR_H = 18;
 const FTR_H      = 9;
-const CONTENT_TOP    = HDR_H + MARGIN;   // 53mm
+const CONTENT_TOP    = HDR_H + 5;        // 43mm (tight gap below info bar)
 const CONTENT_BOTTOM = PH - FTR_H - MARGIN; // 273mm (3mm pair-gap after last row acts as buffer)
 const CONTENT_H      = CONTENT_BOTTOM - CONTENT_TOP; // 220mm
 
