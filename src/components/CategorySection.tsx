@@ -5,6 +5,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown, ChevronRight, Plus, Trash2, ArrowUp, ArrowDown, Pencil } from "lucide-react";
 import { Category, CategoryUnit } from "@/types/report";
 import PhotoGrid from "@/components/PhotoGrid";
+import PairedPhotoGrid from "@/components/PairedPhotoGrid";
 
 interface Props {
   category: Category;
@@ -88,16 +89,13 @@ const UnitBasedSection = ({ category, onUpdate }: Props) => {
               </Button>
             )}
           </div>
-          <CollapsibleContent className="ml-4 mt-2 space-y-3 border-l-2 border-border pl-4">
-            <PhotoGrid
-              label="📷 ก่อนทำ"
-              photos={unit.beforePhotos}
-              onChange={(photos) => updateUnit(unit.id, { beforePhotos: photos })}
-            />
-            <PhotoGrid
-              label="✅ หลังทำ"
-              photos={unit.afterPhotos}
-              onChange={(photos) => updateUnit(unit.id, { afterPhotos: photos })}
+          <CollapsibleContent className="ml-4 mt-2 border-l-2 border-border pl-4">
+            <PairedPhotoGrid
+              beforePhotos={unit.beforePhotos}
+              afterPhotos={unit.afterPhotos}
+              onChange={(before, after) =>
+                updateUnit(unit.id, { beforePhotos: before, afterPhotos: after })
+              }
             />
           </CollapsibleContent>
         </Collapsible>
