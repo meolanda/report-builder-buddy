@@ -12,7 +12,7 @@ const IMG_HDR_H  = 20;
 const INFO_BAR_H = 18;
 const FTR_H      = 9;
 const CONTENT_TOP    = HDR_H + MARGIN;   // 53mm
-const CONTENT_BOTTOM = PH - FTR_H - MARGIN; // 273mm
+const CONTENT_BOTTOM = PH - FTR_H - MARGIN - 5; // 268mm (5mm safe buffer above footer)
 const CONTENT_H      = CONTENT_BOTTOM - CONTENT_TOP; // 220mm
 
 // Photo grid
