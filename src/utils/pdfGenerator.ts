@@ -22,14 +22,15 @@ const IMG_W    = (CW - IMG_GAP) / 2;    // ~87.5mm per cell
 // Per-page section header (unit name + date) + column labels
 const UNIT_HDR_H = 12;   // "🧊 ตู้แช่ › ยูนิต 1 | 17 Jul 25"
 const COL_LBL_H  = 8;    // "ก่อนทำ | หลังทำ"
-const PAIR_H     = 50;   // photo pair row
+const PAIR_H     = 47;   // photo pair row height
+const PAIR_GAP   = 3;    // gap between consecutive pairs
 
 // Fixed-sub section label (no before/after)
 const SUB_LBL_H  = 10;
 
 // Min space to start a new unit group (hdr + lbl + first row)
-const UNIT_MIN = UNIT_HDR_H + COL_LBL_H + PAIR_H; // 70mm
-const SUB_MIN  = SUB_LBL_H + PAIR_H;               // 60mm
+const UNIT_MIN = UNIT_HDR_H + COL_LBL_H + PAIR_H + PAIR_GAP; // 70mm
+const SUB_MIN  = SUB_LBL_H + PAIR_H + PAIR_GAP;               // 60mm
 
 // ─── Colours ───────────────────────────────────────────────────────────────────
 const NAVY  : [number,number,number] = [30,  58,  95];
@@ -352,14 +353,14 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         push({ t: "col-lbl" }, COL_LBL_H);
 
         for (const pair of pairs) {
-          if (!fits(PAIR_H)) {
+          if (!fits(PAIR_H + PAIR_GAP)) {
             newPage();
             push({ t: "unit-hdr", icon: cat.icon, catName: cat.name, unitName: unit.name }, UNIT_HDR_H);
             push({ t: "col-lbl" }, COL_LBL_H);
           }
           push({ t: "pair", before: pair.before, after: pair.after }, PAIR_H);
+          push({ t: "gap", h: PAIR_GAP }, PAIR_GAP);
         }
-        push({ t: "gap", h: 5 }, 5);
       }
 
     } else {
@@ -379,13 +380,13 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         push({ t: "sub-lbl", icon: cat.icon, catName: cat.name, subName: sub.name }, SUB_LBL_H);
 
         for (let i = 0; i < sub.photos.length; i += 2) {
-          if (!fits(PAIR_H)) {
+          if (!fits(PAIR_H + PAIR_GAP)) {
             newPage();
             push({ t: "sub-lbl", icon: cat.icon, catName: cat.name, subName: sub.name + " (ต่อ)" }, SUB_LBL_H);
           }
           push({ t: "photo-row", left: sub.photos[i] ?? null, right: sub.photos[i + 1] ?? null }, PAIR_H);
+          push({ t: "gap", h: PAIR_GAP }, PAIR_GAP);
         }
-        push({ t: "gap", h: 4 }, 4);
       }
     }
   }
@@ -465,7 +466,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
         // Entry/exit photos on cover
         if (entryExitPhotos.length) {
-          ry += 12;
+          ry += 20;
           font(pdf, "bold", 12); tc(pdf, NAVY);
           pdf.text("📷  รูปเข้า-ออกงาน", MARGIN, ry);
           ry += 5;
