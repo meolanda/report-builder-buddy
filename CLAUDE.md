@@ -34,7 +34,28 @@ Deploy: GitHub `main` → auto-deploy ผ่าน Vercel (https://report-builde
 - **แก้ชื่อยูนิต (Unit)**: ดับเบิลคลิกที่ชื่อ → inline input
 - **แก้ชื่อหัวข้อย่อย (SubSection)**: คลิกปุ่ม ✏️ หรือดับเบิลคลิกที่ชื่อ
 - **เลื่อนหัวข้อย่อย**: ปุ่ม ↑/↓ ใน `FixedSubSection` — disabled อัตโนมัติที่ขอบบน/ล่าง
-- **Lightbox**: คลิกรูปใน `PhotoGrid` → เปิดรูปขยายเต็มจอ (ZoomIn cursor hint บน hover)
+- **Lightbox**: คลิกรูปใน `PhotoGrid` / `PairedPhotoGrid` → เปิดรูปขยายเต็มจอ
+
+## PairedPhotoGrid (`src/components/PairedPhotoGrid.tsx`)
+
+ใช้กับ **unit-based** sections แทน 2 PhotoGrids แยกกัน — แสดงรูป ก่อนทำ | หลังทำ เป็นตารางซ้าย-ขวา ให้เห็นการจับคู่ชัดเจนก่อน export PDF:
+
+```
+┌─────────────────┬─────────────────┐
+│   📷 ก่อนทำ    │   ✅ หลังทำ    │
+├─────────────────┼─────────────────┤
+│   [รูปที่ 1]   │   [รูปที่ 1]   │  ← คู่ที่ 1
+├─────────────────┼─────────────────┤
+│   [รูปที่ 2]   │     —           │  ← ก่อนทำมีแต่หลังทำไม่มี → แสดง "—"
+├─────────────────┼─────────────────┤
+│ + เพิ่มรูปก่อน │ + เพิ่มรูปหลัง │
+└─────────────────┴─────────────────┘
+```
+
+- การจับคู่ด้วย index: row i = `beforePhotos[i]` + `afterPhotos[i]`
+- ถ้าจำนวนไม่เท่ากัน → ช่องที่ไม่มีรูปแสดง "—" (ตรงกับ PDF ที่แสดง dash)
+- Props: `beforePhotos`, `afterPhotos`, `onChange(before, after)`
+- Lightbox และ caption edit built-in (ไม่ต้องพึ่ง PhotoGrid)
 
 ## การจัดเก็บ
 
@@ -55,17 +76,20 @@ Deploy: GitHub `main` → auto-deploy ผ่าน Vercel (https://report-builde
 | `cover` | 0 (วาด freeform) | หน้าปก — ต้องอยู่หน้าแรกคนเดียวเสมอ |
 | `unit-hdr` | `UNIT_HDR_H` = 12mm | แถบ navy "🧊 แอร์ › ยูนิต 1 \| วันที่" |
 | `col-lbl` | `COL_LBL_H` = 8mm | แถว "ก่อนทำ \| หลังทำ" |
-| `pair` | `PAIR_H` = 50mm | รูปคู่ before(ซ้าย) / after(ขวา) |
+| `pair` | `PAIR_H` = 47mm | รูปคู่ before(ซ้าย) / after(ขวา) |
 | `sub-lbl` | `SUB_LBL_H` = 10mm | header หัวข้อย่อย fixed-sub |
-| `photo-row` | `PAIR_H` = 50mm | 2-col grid สำหรับ fixed-sub |
+| `photo-row` | `PAIR_H` = 47mm | 2-col grid สำหรับ fixed-sub |
 | `gap` | กำหนดเอง | ช่องว่างระหว่างกลุ่ม |
 | `conclusion` | 0 (วาด freeform) | สรุปผลการทำงาน |
 | `closing` | 0 (วาด freeform) | ข้อความท้ายรายงาน |
 
 ### Page packing rules
 - **หน้าปกต้องอยู่คนเดียวเสมอ** — ใช้ `newPage()` ก่อนเริ่ม categories เสมอ (ห้ามปล่อยให้ content ต่อท้าย cover โดยอัตโนมัติ)
-- Unit group ใหม่: ถ้า `!fits(UNIT_MIN)` (= 70mm) → `newPage()` ก่อน
-- Sub group ใหม่: ถ้า `!fits(SUB_MIN)` (= 60mm) → `newPage()` ก่อน
+- Unit group ใหม่: ถ้า `!fits(UNIT_MIN)` → `newPage()` ก่อน
+- Sub group ใหม่: ถ้า `!fits(SUB_MIN)` → `newPage()` ก่อน
+- แต่ละ pair ตามด้วย `gap(PAIR_GAP=3mm)` — ทำให้รูปไม่ชนกัน และ gap หลังคู่สุดท้ายทำหน้าที่เป็น buffer ก่อน footer
+- **CONTENT_TOP = HDR_H + 5mm** (ไม่ใช่ HDR_H + MARGIN) — ลดช่องว่างระหว่าง info bar กับเนื้อหาให้แน่นขึ้น
+- **ห้ามเพิ่ม extra buffer ที่ CONTENT_BOTTOM** — เคยเพิ่ม 5mm แล้วทำให้ใส่ได้แค่ 3 คู่ต่อหน้าแทนที่จะเป็น 4 คู่
 - `conclusion` / `closing`: เช็ค `fits()` ก่อน — ถ้าพื้นที่พอให้ pack ต่อท้ายหน้าปัจจุบัน ไม่บังคับ `newPage()`
 - ถ้า unit มีรูปมากกว่าพอดีหน้า → `newPage()` + repeat unit-hdr + col-lbl
 
