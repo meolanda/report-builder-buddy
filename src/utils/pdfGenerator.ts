@@ -29,6 +29,10 @@ const PAIR_GAP   = 3;    // gap between consecutive pairs
 const ROW_MIN_H = 35;
 const ROW_MAX_H = 100;
 
+// Fixed row height used in "stretch" mode, where every photo is forced to
+// fill an identical box (distorting its aspect ratio) so rows line up exactly.
+const STRETCH_ROW_H = 47;
+
 // Fixed-sub section label (no before/after)
 const SUB_LBL_H  = 10;
 
@@ -129,8 +133,13 @@ function cachedAspect(photo: PhotoItem | null): number {
 }
 
 // Height for a row of photos shown at full `width`, from each photo's real
-// aspect ratio — never crops or stretches, just clamped to a sane min/max.
-function fitRowHeight(photos: (PhotoItem | null)[], width: number, min = ROW_MIN_H, max = ROW_MAX_H): number {
+// aspect ratio — never crops, just clamped to a sane min/max. In stretch mode
+// every row uses the same fixed height instead (photos get distorted to fit).
+function fitRowHeight(
+  photos: (PhotoItem | null)[], width: number, stretch: boolean,
+  min = ROW_MIN_H, max = ROW_MAX_H
+): number {
+  if (stretch) return STRETCH_ROW_H;
   let h = min;
   for (const p of photos) {
     if (!p) continue;
@@ -174,12 +183,14 @@ function font(pdf: jsPDF, w: "normal"|"bold", size: number) {
   pdf.setFontSize(size);
 }
 
-// Draw image within a row slot (contain fit — full photo, no crop/stretch).
-// Border wraps the photo's own bounds, not the full slot, so a photo shorter
-// than its paired row doesn't leave a boxed-in blank gap underneath it.
+// Draw image within a row slot. Default (stretch=false) is contain fit — full
+// photo, no crop/distortion, border wraps the photo's own bounds so a photo
+// shorter than its paired row doesn't leave a boxed-in blank gap underneath
+// it. stretch=true instead fills the whole slot exactly, distorting the
+// photo's aspect ratio so every cell lines up to an identical size.
 async function drawCellImage(
   pdf: jsPDF, photo: PhotoItem | null,
-  x: number, y: number, cellW: number, cellH: number
+  x: number, y: number, cellW: number, cellH: number, stretch: boolean
 ) {
   if (!photo) {
     dc(pdf, BORDER); pdf.setLineWidth(0.25);
@@ -192,13 +203,17 @@ async function drawCellImage(
   const imgSrc = IMG_B64_CACHE.get(photo.url) ?? photo.url;
   if (imgSrc) {
     try {
-      const aspect   = cachedAspect(photo);
-      const cellRatio = cellW / cellH;
-      let dw: number, dh: number;
-      if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
-      else                     { dh = cellH; dw = dh * aspect; }
-      const ox = x + (cellW - dw) / 2;
-      const oy = y + (cellH - dh) / 2;
+      let dw: number, dh: number, ox: number, oy: number;
+      if (stretch) {
+        dw = cellW; dh = cellH; ox = x; oy = y;
+      } else {
+        const aspect    = cachedAspect(photo);
+        const cellRatio = cellW / cellH;
+        if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
+        else                     { dh = cellH; dw = dh * aspect; }
+        ox = x + (cellW - dw) / 2;
+        oy = y + (cellH - dh) / 2;
+      }
       dc(pdf, BORDER); pdf.setLineWidth(0.25);
       pdf.rect(ox, oy, dw, dh);
       pdf.addImage(imgSrc, imgFormat(imgSrc), ox, oy, dw, dh, photo.id);
@@ -314,9 +329,16 @@ type Block =
 interface PDFPage { isCover: boolean; blocks: Block[] }
 
 // ─── Main export ───────────────────────────────────────────────────────────────
-interface PDFOptions { watermarkText?: string }
+interface PDFOptions {
+  watermarkText?: string;
+  /** Force every photo to fill an identical box (distorts aspect ratio) so
+   *  rows always line up, instead of the default: full photo, no distortion,
+   *  rows sized to the tallest photo in the pair. */
+  stretchPhotos?: boolean;
+}
 
 export async function downloadPDF(data: ReportData, options?: PDFOptions) {
+  const stretch = !!options?.stretchPhotos;
   const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   await registerFonts(pdf);
   await preloadAll(data);
@@ -373,13 +395,13 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         }
 
         // Start header for this unit (pack onto current page if space allows)
-        const firstRowH = pairs.length ? fitRowHeight([pairs[0].before, pairs[0].after], IMG_W) : ROW_MIN_H;
+        const firstRowH = pairs.length ? fitRowHeight([pairs[0].before, pairs[0].after], IMG_W, stretch) : ROW_MIN_H;
         if (!fits(UNIT_HDR_H + COL_LBL_H + firstRowH + PAIR_GAP)) newPage();
         push({ t: "unit-hdr", icon: cat.icon, catName: cat.name, unitName: unit.name }, UNIT_HDR_H);
         push({ t: "col-lbl" }, COL_LBL_H);
 
         for (const pair of pairs) {
-          const rowH = fitRowHeight([pair.before, pair.after], IMG_W);
+          const rowH = fitRowHeight([pair.before, pair.after], IMG_W, stretch);
           if (!fits(rowH + PAIR_GAP)) {
             newPage();
             push({ t: "unit-hdr", icon: cat.icon, catName: cat.name, unitName: unit.name }, UNIT_HDR_H);
@@ -397,7 +419,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         if (!sub.photos.length) continue;
 
         const firstRowH = sub.photos.length
-          ? fitRowHeight([sub.photos[0], sub.photos[1] ?? null], IMG_W)
+          ? fitRowHeight([sub.photos[0], sub.photos[1] ?? null], IMG_W, stretch)
           : ROW_MIN_H;
         if (!fits(SUB_LBL_H + firstRowH + PAIR_GAP)) newPage();
 
@@ -406,7 +428,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         for (let i = 0; i < sub.photos.length; i += 2) {
           const left  = sub.photos[i] ?? null;
           const right = sub.photos[i + 1] ?? null;
-          const rowH  = fitRowHeight([left, right], IMG_W);
+          const rowH  = fitRowHeight([left, right], IMG_W, stretch);
           if (!fits(rowH + PAIR_GAP)) {
             newPage();
             push({ t: "sub-lbl", icon: cat.icon, catName: cat.name, subName: sub.name + " (ต่อ)" }, SUB_LBL_H);
@@ -506,26 +528,11 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
             const rowPhotos = shots.slice(i, i + 2);
             const cnt   = rowPhotos.length;
             const cellW = cnt === 1 ? IMG_W * 1.25 : IMG_W;
-            const cellH = fitRowHeight(rowPhotos, cellW);
+            const cellH = fitRowHeight(rowPhotos, cellW, stretch);
             const startX = cnt === 1 ? MARGIN + (CW - cellW) / 2 : MARGIN;
             for (let j = 0; j < cnt; j++) {
-              const photo  = rowPhotos[j];
-              const x      = startX + j * (cellW + IMG_GAP);
-              const imgSrc = IMG_B64_CACHE.get(photo.url) ?? photo.url;
-              if (imgSrc) {
-                try {
-                  const aspect    = cachedAspect(photo);
-                  const cellRatio = cellW / cellH;
-                  let dw: number, dh: number;
-                  if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
-                  else                     { dh = cellH; dw = dh * aspect; }
-                  const ox = x + (cellW - dw) / 2;
-                  const oy = ry + (cellH - dh) / 2;
-                  dc(pdf, BORDER); pdf.setLineWidth(0.25);
-                  pdf.rect(ox, oy, dw, dh);
-                  pdf.addImage(imgSrc, imgFormat(imgSrc), ox, oy, dw, dh, photo.id);
-                } catch { /* skip */ }
-              }
+              const x = startX + j * (cellW + IMG_GAP);
+              await drawCellImage(pdf, rowPhotos[j], x, ry, cellW, cellH, stretch);
             }
             ry += cellH + 5;
           }
@@ -550,8 +557,8 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Photo pair row (before | after) ───────────────────────────────────────
       else if (b.t === "pair") {
-        await drawCellImage(pdf, b.before, MARGIN,            ry, IMG_W, b.h);
-        await drawCellImage(pdf, b.after,  MARGIN + IMG_W + IMG_GAP, ry, IMG_W, b.h);
+        await drawCellImage(pdf, b.before, MARGIN,            ry, IMG_W, b.h, stretch);
+        await drawCellImage(pdf, b.after,  MARGIN + IMG_W + IMG_GAP, ry, IMG_W, b.h, stretch);
         ry += b.h;
       }
 
@@ -563,8 +570,8 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Photo row (fixed-sub, 2-col grid) ─────────────────────────────────────
       else if (b.t === "photo-row") {
-        await drawCellImage(pdf, b.left,  MARGIN,            ry, IMG_W, b.h);
-        await drawCellImage(pdf, b.right, MARGIN + IMG_W + IMG_GAP, ry, IMG_W, b.h);
+        await drawCellImage(pdf, b.left,  MARGIN,            ry, IMG_W, b.h, stretch);
+        await drawCellImage(pdf, b.right, MARGIN + IMG_W + IMG_GAP, ry, IMG_W, b.h, stretch);
         ry += b.h;
       }
 

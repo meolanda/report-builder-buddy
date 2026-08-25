@@ -15,6 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReportStorage } from "@/hooks/useReportStorage";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 
@@ -28,6 +29,7 @@ const Index = () => {
   const [showPreview, setShowPreview] = useState(false);
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [watermarkText, setWatermarkText] = useState("");
+  const [stretchPhotos, setStretchPhotos] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
@@ -150,7 +152,7 @@ const Index = () => {
     try {
       await downloadPDF(
         { jobInfo, categories, conclusion },
-        { watermarkText: watermarkText.trim() || undefined }
+        { watermarkText: watermarkText.trim() || undefined, stretchPhotos }
       );
       toast({ title: "สร้าง PDF สำเร็จ" });
     } catch (error) {
@@ -252,6 +254,19 @@ const Index = () => {
                 onChange={(e) => setWatermarkText(e.target.value)}
                 className="mt-2"
               />
+            </div>
+
+            {/* Photo fit mode */}
+            <div className="flex items-center justify-between rounded-lg border border-border bg-card p-4">
+              <div className="space-y-0.5">
+                <Label className="text-sm font-medium">🖼️ บีบรูปให้ขนาดเท่ากันทุกใบ</Label>
+                <p className="text-xs text-muted-foreground">
+                  {stretchPhotos
+                    ? "ทุกช่องสูงเท่ากันเป๊ะ แต่รูปแนวตั้ง/แนวนอนจะถูกยืดจนสัดส่วนผิดเพี้ยน"
+                    : "รักษาสัดส่วนรูปจริง ไม่มีการยืด/บิดเบี้ยว (แนะนำ) — บางช่องอาจสูงไม่เท่ากัน"}
+                </p>
+              </div>
+              <Switch checked={stretchPhotos} onCheckedChange={setStretchPhotos} />
             </div>
 
             {/* Actions */}
