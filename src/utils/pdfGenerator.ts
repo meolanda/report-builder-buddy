@@ -170,8 +170,8 @@ async function drawCellImage(
       const aspect   = await getAspect(imgSrc);
       const cellRatio = cellW / cellH;
       let dw: number, dh: number;
-      if (aspect >= cellRatio) { dh = cellH; dw = dh * aspect; }
-      else                     { dw = cellW; dh = dw / aspect; }
+      if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
+      else                     { dh = cellH; dw = dh * aspect; }
       const ox = x + (cellW - dw) / 2;
       const oy = y + (cellH - dh) / 2;
       const pt = (v: number) => (v * 72 / 25.4).toFixed(3);
@@ -491,8 +491,8 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
                   const aspect    = await getAspect(imgSrc);
                   const cellRatio = cellW / cellH;
                   let dw: number, dh: number;
-                  if (aspect >= cellRatio) { dh = cellH; dw = dh * aspect; }
-                  else                     { dw = cellW; dh = dw / aspect; }
+                  if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
+                  else                     { dh = cellH; dw = dh * aspect; }
                   const ox = x + (cellW - dw) / 2;
                   const oy = ry + (cellH - dh) / 2;
                   const pt = (v: number) => (v * 72 / 25.4).toFixed(3);

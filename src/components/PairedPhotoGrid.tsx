@@ -79,11 +79,11 @@ const PairedPhotoGrid = ({ beforePhotos, afterPhotos, onChange }: Props) => {
     <div className="p-1.5">
       {photo ? (
         <div className="group space-y-1">
-          <div className="relative aspect-[4/3] overflow-hidden rounded border border-border">
+          <div className="relative aspect-[4/3] overflow-hidden rounded border border-border bg-muted/20">
             <img
               src={photo.url}
               alt={photo.caption || "photo"}
-              className="h-full w-full object-cover cursor-zoom-in"
+              className="h-full w-full object-contain cursor-zoom-in"
               onClick={() => setLightbox(photo.url)}
             />
             <button
