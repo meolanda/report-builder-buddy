@@ -174,16 +174,16 @@ function font(pdf: jsPDF, w: "normal"|"bold", size: number) {
   pdf.setFontSize(size);
 }
 
-// Clip + draw image (cover/crop — fills cell, clips overflow)
+// Draw image within a row slot (contain fit — full photo, no crop/stretch).
+// Border wraps the photo's own bounds, not the full slot, so a photo shorter
+// than its paired row doesn't leave a boxed-in blank gap underneath it.
 async function drawCellImage(
   pdf: jsPDF, photo: PhotoItem | null,
   x: number, y: number, cellW: number, cellH: number
 ) {
-  // Cell border
-  dc(pdf, BORDER); pdf.setLineWidth(0.25);
-  pdf.rect(x, y, cellW, cellH);
-
   if (!photo) {
+    dc(pdf, BORDER); pdf.setLineWidth(0.25);
+    pdf.rect(x, y, cellW, cellH);
     font(pdf, "normal", 8); tc(pdf, LIGHT);
     pdf.text("—", x + cellW / 2, y + cellH / 2 + 2, { align: "center" });
     return;
@@ -199,12 +199,12 @@ async function drawCellImage(
       else                     { dh = cellH; dw = dh * aspect; }
       const ox = x + (cellW - dw) / 2;
       const oy = y + (cellH - dh) / 2;
-      const pt = (v: number) => (v * 72 / 25.4).toFixed(3);
-      pdf.saveGraphicsState();
-      pdf.internal.write(`${pt(x)} ${pt(PH - y - cellH)} ${pt(cellW)} ${pt(cellH)} re W n`);
+      dc(pdf, BORDER); pdf.setLineWidth(0.25);
+      pdf.rect(ox, oy, dw, dh);
       pdf.addImage(imgSrc, imgFormat(imgSrc), ox, oy, dw, dh, photo.id);
-      pdf.restoreGraphicsState();
     } catch {
+      dc(pdf, BORDER); pdf.setLineWidth(0.25);
+      pdf.rect(x, y, cellW, cellH);
       font(pdf, "normal", 8); tc(pdf, LIGHT);
       pdf.text("ไม่พบรูปภาพ", x + cellW / 2, y + cellH / 2, { align: "center" });
     }
@@ -512,7 +512,6 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
               const photo  = rowPhotos[j];
               const x      = startX + j * (cellW + IMG_GAP);
               const imgSrc = IMG_B64_CACHE.get(photo.url) ?? photo.url;
-              dc(pdf, BORDER); pdf.setLineWidth(0.25); pdf.rect(x, ry, cellW, cellH);
               if (imgSrc) {
                 try {
                   const aspect    = cachedAspect(photo);
@@ -522,11 +521,9 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
                   else                     { dh = cellH; dw = dh * aspect; }
                   const ox = x + (cellW - dw) / 2;
                   const oy = ry + (cellH - dh) / 2;
-                  const pt = (v: number) => (v * 72 / 25.4).toFixed(3);
-                  pdf.saveGraphicsState();
-                  pdf.internal.write(`${pt(x)} ${pt(PH - ry - cellH)} ${pt(cellW)} ${pt(cellH)} re W n`);
+                  dc(pdf, BORDER); pdf.setLineWidth(0.25);
+                  pdf.rect(ox, oy, dw, dh);
                   pdf.addImage(imgSrc, imgFormat(imgSrc), ox, oy, dw, dh, photo.id);
-                  pdf.restoreGraphicsState();
                 } catch { /* skip */ }
               }
             }
