@@ -22,15 +22,15 @@ const IMG_W    = (CW - IMG_GAP) / 2;    // ~87.5mm per cell
 // Per-page section header (unit name + date) + column labels
 const UNIT_HDR_H = 12;   // "🧊 ตู้แช่ › ยูนิต 1 | 17 Jul 25"
 const COL_LBL_H  = 8;    // "ก่อนทำ | หลังทำ"
-const PAIR_H     = 47;   // photo pair row height
 const PAIR_GAP   = 3;    // gap between consecutive pairs
+
+// Photo row height is computed per-row from each photo's real aspect ratio
+// (full image, no crop/stretch) — these just bound how short/tall a row can get.
+const ROW_MIN_H = 35;
+const ROW_MAX_H = 100;
 
 // Fixed-sub section label (no before/after)
 const SUB_LBL_H  = 10;
-
-// Min space to start a new unit group (hdr + lbl + first row)
-const UNIT_MIN = UNIT_HDR_H + COL_LBL_H + PAIR_H + PAIR_GAP; // 70mm
-const SUB_MIN  = SUB_LBL_H + PAIR_H + PAIR_GAP;               // 60mm
 
 // ─── Colours ───────────────────────────────────────────────────────────────────
 const NAVY  : [number,number,number] = [30,  58,  95];
@@ -119,6 +119,26 @@ async function getAspect(b64: string): Promise<number> {
   });
 }
 
+// Real aspect ratio of each photo, keyed by its (pre-compression) url —
+// populated by preloadAll() so Pass 1 pagination can size rows synchronously.
+const ASPECT_CACHE = new Map<string, number>();
+
+function cachedAspect(photo: PhotoItem | null): number {
+  if (!photo) return 4 / 3;
+  return ASPECT_CACHE.get(photo.url) ?? 4 / 3;
+}
+
+// Height for a row of photos shown at full `width`, from each photo's real
+// aspect ratio — never crops or stretches, just clamped to a sane min/max.
+function fitRowHeight(photos: (PhotoItem | null)[], width: number, min = ROW_MIN_H, max = ROW_MAX_H): number {
+  let h = min;
+  for (const p of photos) {
+    if (!p) continue;
+    h = Math.max(h, width / cachedAspect(p));
+  }
+  return Math.min(h, max);
+}
+
 function imgFormat(b64: string): string {
   if (b64.includes("data:image/png"))  return "PNG";
   if (b64.includes("data:image/webp")) return "WEBP";
@@ -137,7 +157,12 @@ async function preloadAll(data: ReportData): Promise<void> {
         for (const p of s.photos) urls.push(p.url);
     }
   }
-  await Promise.all(urls.map(async u => { try { await toB64(u); } catch {} }));
+  await Promise.all(urls.map(async u => {
+    try {
+      const b64 = await toB64(u);
+      ASPECT_CACHE.set(u, await getAspect(b64));
+    } catch { /* leave uncached, cachedAspect() falls back to 4/3 */ }
+  }));
 }
 
 // ─── Drawing utilities ─────────────────────────────────────────────────────────
@@ -167,7 +192,7 @@ async function drawCellImage(
   const imgSrc = IMG_B64_CACHE.get(photo.url) ?? photo.url;
   if (imgSrc) {
     try {
-      const aspect   = await getAspect(imgSrc);
+      const aspect   = cachedAspect(photo);
       const cellRatio = cellW / cellH;
       let dw: number, dh: number;
       if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
@@ -279,9 +304,9 @@ type Block =
   | { t: "cover" }
   | { t: "unit-hdr"; icon: string; catName: string; unitName: string }
   | { t: "col-lbl" }
-  | { t: "pair"; before: PhotoItem | null; after: PhotoItem | null }
+  | { t: "pair"; before: PhotoItem | null; after: PhotoItem | null; h: number }
   | { t: "sub-lbl"; icon: string; catName: string; subName: string }
-  | { t: "photo-row"; left: PhotoItem | null; right: PhotoItem | null }
+  | { t: "photo-row"; left: PhotoItem | null; right: PhotoItem | null; h: number }
   | { t: "gap"; h: number }
   | { t: "conclusion"; text: string }
   | { t: "closing" };
@@ -348,43 +373,45 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
         }
 
         // Start header for this unit (pack onto current page if space allows)
-        if (!fits(UNIT_MIN)) newPage();
+        const firstRowH = pairs.length ? fitRowHeight([pairs[0].before, pairs[0].after], IMG_W) : ROW_MIN_H;
+        if (!fits(UNIT_HDR_H + COL_LBL_H + firstRowH + PAIR_GAP)) newPage();
         push({ t: "unit-hdr", icon: cat.icon, catName: cat.name, unitName: unit.name }, UNIT_HDR_H);
         push({ t: "col-lbl" }, COL_LBL_H);
 
         for (const pair of pairs) {
-          if (!fits(PAIR_H + PAIR_GAP)) {
+          const rowH = fitRowHeight([pair.before, pair.after], IMG_W);
+          if (!fits(rowH + PAIR_GAP)) {
             newPage();
             push({ t: "unit-hdr", icon: cat.icon, catName: cat.name, unitName: unit.name }, UNIT_HDR_H);
             push({ t: "col-lbl" }, COL_LBL_H);
           }
-          push({ t: "pair", before: pair.before, after: pair.after }, PAIR_H);
+          push({ t: "pair", before: pair.before, after: pair.after, h: rowH }, rowH);
           push({ t: "gap", h: PAIR_GAP }, PAIR_GAP);
         }
       }
 
     } else {
       // fixed-sub: photos shown in 2-col grid, no before/after pairing
-      let firstSub = true;
       for (const sub of cat.subSections) {
         if (sub.id === ENTRY_EXIT_SUB_ID) continue;
         if (!sub.photos.length) continue;
 
-        if (firstSub) {
-          if (!fits(SUB_MIN)) newPage();
-          firstSub = false;
-        } else {
-          if (!fits(SUB_MIN)) newPage();
-        }
+        const firstRowH = sub.photos.length
+          ? fitRowHeight([sub.photos[0], sub.photos[1] ?? null], IMG_W)
+          : ROW_MIN_H;
+        if (!fits(SUB_LBL_H + firstRowH + PAIR_GAP)) newPage();
 
         push({ t: "sub-lbl", icon: cat.icon, catName: cat.name, subName: sub.name }, SUB_LBL_H);
 
         for (let i = 0; i < sub.photos.length; i += 2) {
-          if (!fits(PAIR_H + PAIR_GAP)) {
+          const left  = sub.photos[i] ?? null;
+          const right = sub.photos[i + 1] ?? null;
+          const rowH  = fitRowHeight([left, right], IMG_W);
+          if (!fits(rowH + PAIR_GAP)) {
             newPage();
             push({ t: "sub-lbl", icon: cat.icon, catName: cat.name, subName: sub.name + " (ต่อ)" }, SUB_LBL_H);
           }
-          push({ t: "photo-row", left: sub.photos[i] ?? null, right: sub.photos[i + 1] ?? null }, PAIR_H);
+          push({ t: "photo-row", left, right, h: rowH }, rowH);
           push({ t: "gap", h: PAIR_GAP }, PAIR_GAP);
         }
       }
@@ -475,11 +502,11 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
           ry += 8;
 
           const shots = entryExitPhotos.slice(0, 4);
-          const cellH = 50;
           for (let i = 0; i < shots.length; i += 2) {
             const rowPhotos = shots.slice(i, i + 2);
             const cnt   = rowPhotos.length;
             const cellW = cnt === 1 ? IMG_W * 1.25 : IMG_W;
+            const cellH = fitRowHeight(rowPhotos, cellW);
             const startX = cnt === 1 ? MARGIN + (CW - cellW) / 2 : MARGIN;
             for (let j = 0; j < cnt; j++) {
               const photo  = rowPhotos[j];
@@ -488,7 +515,7 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
               dc(pdf, BORDER); pdf.setLineWidth(0.25); pdf.rect(x, ry, cellW, cellH);
               if (imgSrc) {
                 try {
-                  const aspect    = await getAspect(imgSrc);
+                  const aspect    = cachedAspect(photo);
                   const cellRatio = cellW / cellH;
                   let dw: number, dh: number;
                   if (aspect >= cellRatio) { dw = cellW; dh = dw / aspect; }
@@ -526,9 +553,9 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Photo pair row (before | after) ───────────────────────────────────────
       else if (b.t === "pair") {
-        await drawCellImage(pdf, b.before, MARGIN,            ry, IMG_W, PAIR_H);
-        await drawCellImage(pdf, b.after,  MARGIN + IMG_W + IMG_GAP, ry, IMG_W, PAIR_H);
-        ry += PAIR_H;
+        await drawCellImage(pdf, b.before, MARGIN,            ry, IMG_W, b.h);
+        await drawCellImage(pdf, b.after,  MARGIN + IMG_W + IMG_GAP, ry, IMG_W, b.h);
+        ry += b.h;
       }
 
       // ── Subsection label (fixed-sub) ──────────────────────────────────────────
@@ -539,9 +566,9 @@ export async function downloadPDF(data: ReportData, options?: PDFOptions) {
 
       // ── Photo row (fixed-sub, 2-col grid) ─────────────────────────────────────
       else if (b.t === "photo-row") {
-        await drawCellImage(pdf, b.left,  MARGIN,            ry, IMG_W, PAIR_H);
-        await drawCellImage(pdf, b.right, MARGIN + IMG_W + IMG_GAP, ry, IMG_W, PAIR_H);
-        ry += PAIR_H;
+        await drawCellImage(pdf, b.left,  MARGIN,            ry, IMG_W, b.h);
+        await drawCellImage(pdf, b.right, MARGIN + IMG_W + IMG_GAP, ry, IMG_W, b.h);
+        ry += b.h;
       }
 
       // ── Gap ──────────────────────────────────────────────────────────────────

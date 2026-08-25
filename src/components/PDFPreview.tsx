@@ -64,7 +64,7 @@ const PDFPreview = ({ data, onClose }: Props) => {
                             <p className="mb-1 text-xs text-muted-foreground">ก่อนทำ</p>
                             <div className="grid grid-cols-3 gap-2">
                               {unit.beforePhotos.map((p) => (
-                                <img key={p.id} src={p.url} alt={p.caption} className="aspect-[4/3] w-full rounded border border-border object-cover" />
+                                <img key={p.id} src={p.url} alt={p.caption} className="w-full h-auto max-h-48 rounded border border-border bg-muted/20 object-contain" />
                               ))}
                             </div>
                           </div>
@@ -74,7 +74,7 @@ const PDFPreview = ({ data, onClose }: Props) => {
                             <p className="mb-1 text-xs text-muted-foreground">หลังทำ</p>
                             <div className="grid grid-cols-3 gap-2">
                               {unit.afterPhotos.map((p) => (
-                                <img key={p.id} src={p.url} alt={p.caption} className="aspect-[4/3] w-full rounded border border-border object-cover" />
+                                <img key={p.id} src={p.url} alt={p.caption} className="w-full h-auto max-h-48 rounded border border-border bg-muted/20 object-contain" />
                               ))}
                             </div>
                           </div>
@@ -90,7 +90,7 @@ const PDFPreview = ({ data, onClose }: Props) => {
                         <p className="mb-2 text-sm font-semibold">{sub.name}</p>
                         <div className="grid grid-cols-3 gap-2">
                           {sub.photos.map((p) => (
-                            <img key={p.id} src={p.url} alt={p.caption} className="aspect-[4/3] w-full rounded border border-border object-cover" />
+                            <img key={p.id} src={p.url} alt={p.caption} className="w-full h-auto max-h-48 rounded border border-border bg-muted/20 object-contain" />
                           ))}
                         </div>
                       </div>

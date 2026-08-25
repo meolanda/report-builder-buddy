@@ -90,11 +90,11 @@ const PhotoGrid = ({ photos, onChange, label }: Props) => {
         <div className={`grid grid-cols-2 gap-2 sm:grid-cols-3 ${isDragging ? "opacity-50" : ""}`}>
           {photos.map((photo) => (
             <div key={photo.id} className="group relative space-y-1">
-              <div className="relative aspect-[4/3] overflow-hidden rounded-md border border-border bg-muted/20">
+              <div className="relative overflow-hidden rounded-md border border-border bg-muted/20">
                 <img
                   src={photo.url}
                   alt={photo.caption || "photo"}
-                  className="h-full w-full object-contain cursor-zoom-in"
+                  className="block w-full h-auto max-h-80 mx-auto object-contain cursor-zoom-in"
                   onClick={() => setLightbox(photo.url)}
                 />
                 {/* Remove button */}
